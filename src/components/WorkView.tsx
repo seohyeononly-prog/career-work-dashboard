@@ -329,6 +329,10 @@ export function WorkView({
             setSchedules((l) => upsert(l, s));
             setModal(null);
           }}
+          onDeleted={(id) => {
+            setSchedules((l) => l.filter((s) => s.id !== id));
+            setModal(null);
+          }}
         />
       )}
     </div>

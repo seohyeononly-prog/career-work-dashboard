@@ -21,6 +21,8 @@ export const api = {
   createSchedule: (v: ScheduleInput) => request<Schedule>("/api/schedules", "POST", v),
   updateSchedule: (id: string, v: Partial<ScheduleInput>) =>
     request<Schedule>(`/api/schedules/${encodeURIComponent(id)}`, "PATCH", v),
+  deleteSchedule: (id: string) =>
+    request<{ ok: true }>(`/api/schedules/${encodeURIComponent(id)}`, "DELETE"),
   createLink: (v: LinkInput) => request<LinkItem>("/api/links", "POST", v),
   updateLink: (id: string, v: Partial<LinkInput>) =>
     request<LinkItem>(`/api/links/${encodeURIComponent(id)}`, "PATCH", v),

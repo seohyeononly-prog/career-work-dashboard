@@ -148,7 +148,7 @@ function ItemForm<T>({
   const error = saveError || deleteError;
 
   const onDelete = async () => {
-    if (!remove || !window.confirm(`"${initial.title}" ${kind}를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    if (!remove || !window.confirm(`"${initial.title}" ${kind}${kind === "업무" ? "를" : "을"} 삭제할까요? 되돌릴 수 없습니다.`)) return;
     setDeleting(true);
     setDeleteError("");
     try {
@@ -223,11 +223,13 @@ export function ScheduleFormModal({
   defaultDate,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   schedule?: Schedule;
   defaultDate?: string;
   onClose: () => void;
   onSaved: (s: Schedule) => void;
+  onDeleted?: (id: string) => void;
 }) {
   return (
     <ItemForm
@@ -237,6 +239,14 @@ export function ScheduleFormModal({
       save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
       onClose={onClose}
       onSaved={onSaved}
+      remove={
+        schedule && onDeleted
+          ? async () => {
+              await api.deleteSchedule(schedule.id);
+              onDeleted(schedule.id);
+            }
+          : undefined
+      }
     />
   );
 }

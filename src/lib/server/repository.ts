@@ -160,6 +160,11 @@ export async function updateSchedule(id: string, patch: unknown): Promise<Schedu
   return schedulesRepo.replace({ ...data, id });
 }
 
+export async function deleteSchedule(id: string): Promise<{ ok: true }> {
+  await schedulesRepo.remove(id);
+  return { ok: true };
+}
+
 // ---- 링크 ----
 export const listLinks = () => linksRepo.list();
 
