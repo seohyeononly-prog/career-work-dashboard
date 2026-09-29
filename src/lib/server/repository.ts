@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { nowStr } from "../date";
 import type { DataSource, LinkItem, Schedule, Task } from "../types";
 import type { z } from "zod";
@@ -24,13 +25,27 @@ const devDb = (): DevDb => (g.__devDb ??= createDevData());
 
 const ALL_TABLES = [TasksTable, SchedulesTable, LinksTable] as unknown as TableDef<{ id: string }>[];
 
+/**
+ * 시트 읽기 결과를 잠깐 저장해 두는 시간(초). 화면 전환마다 Sheets API를 부르지 않기 위함.
+ * 앱에서 쓰면 바로 비우므로, 늦게 보이는 건 시트에서 직접 고친 내용뿐이다.
+ */
+const READ_CACHE_SECONDS = 30;
+
 function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevDb) {
   const devList = () => devDb()[devKey] as unknown as T[];
+  const tag = `sheet:${def.sheet}`;
+
+  async function readFresh(): Promise<T[]> {
+    await ensureSheets(ALL_TABLES);
+    return readAll(def);
+  }
+  const readCached = unstable_cache(readFresh, [tag], { tags: [tag], revalidate: READ_CACHE_SECONDS });
+  /** 쓰기 뒤에 호출해 다음 읽기가 새 값을 가져오게 한다 */
+  const invalidate = () => revalidateTag(tag, { expire: 0 });
 
   async function list(): Promise<T[]> {
     if (getDataSource() === "dev") return structuredClone(devList());
-    await ensureSheets(ALL_TABLES);
-    return readAll(def);
+    return readCached();
   }
 
   async function insert(item: T): Promise<T> {
@@ -38,6 +53,7 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
     else {
       await ensureSheets(ALL_TABLES);
       await appendRow(def, item);
+      invalidate();
     }
     return item;
   }
@@ -51,17 +67,20 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
     } else {
       await ensureSheets(ALL_TABLES);
       await updateRow(def, item);
+      invalidate();
     }
     return item;
   }
 
+  /** 수정 직전 값은 캐시가 아니라 시트에서 새로 읽는다 (시트에서 직접 고친 내용을 덮어쓰지 않도록) */
   async function get(id: string): Promise<T> {
-    const found = (await list()).find((x) => x.id === id);
+    const all = getDataSource() === "dev" ? await list() : await readFresh();
+    const found = all.find((x) => x.id === id);
     if (!found) throw new NotFoundError("항목을 찾을 수 없습니다.");
     return found;
   }
 
-  return { list, insert, replace, get };
+  return { list, insert, replace, get, invalidate };
 }
 
 const tasksRepo = makeRepo(TasksTable, "tasks");
@@ -96,6 +115,7 @@ export async function reorderTasks(input: unknown): Promise<{ ok: true }> {
   } else {
     await ensureSheets(ALL_TABLES);
     await updateColumn(TasksTable, TasksTable.headers.indexOf("순서") + 1, order);
+    tasksRepo.invalidate();
   }
   return { ok: true };
 }
