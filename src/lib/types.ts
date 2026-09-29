@@ -76,3 +76,11 @@ export const byLinkOrder = (a: LinkItem, b: LinkItem) =>
 
 /** 일정 제목 맨 앞의 '[기업]'에서 기업명을 꺼낸다. 없으면 "" */
 export const companyOf = (title: string) => title.match(/^\s*\[([^\]]+)\]/)?.[1].trim() ?? "";
+
+/** 사이드바 바로가기 버튼 */
+export interface Shortcut {
+  id: string;
+  name: string;
+  url: string;
+}
+export type ShortcutInput = Omit<Shortcut, "id">;

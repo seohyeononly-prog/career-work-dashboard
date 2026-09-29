@@ -54,3 +54,12 @@ export const linkInputSchema = z.object({
 export function firstIssue(err: z.ZodError): string {
   return err.issues[0]?.message ?? "입력값을 확인해 주세요.";
 }
+
+export const shortcutInputSchema = z.object({
+  name: text(30).min(1, "버튼 이름을 입력해 주세요."),
+  url: z
+    .string()
+    .trim()
+    .url("올바른 URL을 입력해 주세요.")
+    .refine((u) => /^https?:\/\//i.test(u), "http 또는 https 주소만 등록할 수 있습니다."),
+});

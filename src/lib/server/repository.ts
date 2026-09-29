@@ -2,12 +2,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { nowStr } from "../date";
-import type { DataSource, LinkItem, Schedule, Task } from "../types";
+import type { DataSource, LinkItem, Schedule, Shortcut, Task } from "../types";
 import type { z } from "zod";
-import { firstIssue, linkInputSchema, scheduleInputSchema, taskInputSchema } from "../validation";
+import { firstIssue, linkInputSchema, scheduleInputSchema, shortcutInputSchema, taskInputSchema } from "../validation";
 import { createDevData } from "./dev-data";
 import { appendRow, deleteRow, ensureSheets, isSheetsConfigured, readAll, updateColumn, updateRow } from "./sheets";
-import { LinksTable, SchedulesTable, TasksTable, type TableDef } from "./tables";
+import { LinksTable, SchedulesTable, ShortcutsTable, TasksTable, type TableDef } from "./tables";
 
 // 데이터 접근 계층. 환경변수가 설정되어 있으면 Google Sheets,
 // 아니면 서버 메모리의 개발용 예시 데이터를 사용한다.
@@ -29,7 +29,7 @@ type DevDb = ReturnType<typeof createDevData>;
 const g = globalThis as unknown as { __devDb?: DevDb };
 const devDb = (): DevDb => (g.__devDb ??= createDevData());
 
-const ALL_TABLES = [TasksTable, SchedulesTable, LinksTable] as unknown as TableDef<{ id: string }>[];
+const ALL_TABLES = [TasksTable, SchedulesTable, LinksTable, ShortcutsTable] as unknown as TableDef<{ id: string }>[];
 
 /**
  * 시트 읽기 결과를 잠깐 저장해 두는 시간(초). 화면 전환마다 Sheets API를 부르지 않기 위함.
@@ -105,6 +105,7 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
 const tasksRepo = makeRepo(TasksTable, "tasks");
 const schedulesRepo = makeRepo(SchedulesTable, "schedules");
 const linksRepo = makeRepo(LinksTable, "links");
+const shortcutsRepo = makeRepo(ShortcutsTable, "shortcuts");
 
 function parse<T>(schema: z.ZodType<T>, v: unknown): T {
   const r = schema.safeParse(v);
@@ -202,5 +203,24 @@ export const reorderLinks = (input: unknown) =>
 
 export async function deleteLink(id: string): Promise<{ ok: true }> {
   await linksRepo.remove(id);
+  return { ok: true };
+}
+
+// ---- 사이드바 바로가기 버튼 ----
+export const listShortcuts = () => shortcutsRepo.list();
+
+export async function createShortcut(input: unknown): Promise<Shortcut> {
+  const data = parse(shortcutInputSchema, input);
+  return shortcutsRepo.insert({ id: newId("B"), ...data });
+}
+
+export async function updateShortcut(id: string, patch: unknown): Promise<Shortcut> {
+  const current = await shortcutsRepo.get(id);
+  const data = parse(shortcutInputSchema, { ...current, ...(patch as object) });
+  return shortcutsRepo.replace({ ...data, id });
+}
+
+export async function deleteShortcut(id: string): Promise<{ ok: true }> {
+  await shortcutsRepo.remove(id);
   return { ok: true };
 }

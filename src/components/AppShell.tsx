@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import type { DataSource } from "@/lib/types";
+import { upsert } from "@/lib/client-api";
+import type { DataSource, Shortcut } from "@/lib/types";
+import { ShortcutFormModal } from "./forms";
 import { ToastProvider } from "./Toast";
 import { cn } from "./ui";
 
@@ -59,19 +61,52 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
 
 const FLEX_URL = "https://flex.team/home";
 
-/** 사이드바 아래: flex 바로가기 + 저장소(연결된 시트 열기) */
-function SidebarFooter({ source, sheetUrl }: { source: DataSource; sheetUrl: string | null }) {
+const shortcutCls =
+  "flex min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50";
+
+/** 사이드바 아래: flex·직접 추가한 바로가기 버튼 + 저장소(연결된 시트 열기) */
+function SidebarFooter({
+  source,
+  sheetUrl,
+  shortcuts,
+  onAdd,
+  onEdit,
+}: {
+  source: DataSource;
+  sheetUrl: string | null;
+  shortcuts: Shortcut[];
+  onAdd: () => void;
+  onEdit: (s: Shortcut) => void;
+}) {
   return (
     <div className="mx-3 mb-4 space-y-1.5">
-      <a
-        href={FLEX_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-between rounded-md border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-      >
+      <a href={FLEX_URL} target="_blank" rel="noopener noreferrer" className={shortcutCls}>
         flex 열기
         <span aria-hidden>↗</span>
       </a>
+      {shortcuts.map((s) => (
+        <div key={s.id} className="group flex items-center gap-1">
+          <a href={s.url} target="_blank" rel="noopener noreferrer" className={shortcutCls}>
+            <span className="truncate">{s.name}</span>
+            <span aria-hidden>↗</span>
+          </a>
+          <button
+            onClick={() => onEdit(s)}
+            aria-label={`${s.name} 버튼 수정`}
+            title="수정"
+            className="rounded px-1 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+          >
+            ✎
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={onAdd}
+        title="사이드바 버튼 추가"
+        className="ml-auto block rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+      >
+        + 버튼 추가
+      </button>
       {source === "sheets" && sheetUrl ? (
         <a
           href={sheetUrl}
@@ -90,39 +125,67 @@ function SidebarFooter({ source, sheetUrl }: { source: DataSource; sheetUrl: str
   );
 }
 
-export function AppShell({
-  source,
-  sheetUrl,
-  children,
-}: {
+export function AppShell(props: {
   source: DataSource;
   /** 저장소 시트 주소 (Sheets 연결 시) */
   sheetUrl: string | null;
+  initialShortcuts: Shortcut[];
+  children: ReactNode;
+}) {
+  // 버튼 추가·삭제 창에서도 토스트를 쓰도록 사이드바까지 감싼다
+  return (
+    <ToastProvider>
+      <Shell {...props} />
+    </ToastProvider>
+  );
+}
+
+function Shell({
+  source,
+  sheetUrl,
+  initialShortcuts,
+  children,
+}: {
+  source: DataSource;
+  sheetUrl: string | null;
+  initialShortcuts: Shortcut[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [shortcuts, setShortcuts] = useState(initialShortcuts);
+  const [modal, setModal] = useState<{ shortcut?: Shortcut } | null>(null);
+
+  const footer = (
+    <SidebarFooter
+      source={source}
+      sheetUrl={sheetUrl}
+      shortcuts={shortcuts}
+      onAdd={() => setModal({})}
+      onEdit={(shortcut) => setModal({ shortcut })}
+    />
+  );
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
       {/* 데스크톱 사이드바 */}
-      <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col justify-between border-r border-slate-200 bg-white md:flex">
+      <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white md:flex">
         <div>
           <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
           <Nav />
         </div>
-        <SidebarFooter source={source} sheetUrl={sheetUrl} />
+        {footer}
       </aside>
 
       {/* 모바일 메뉴 */}
       {open && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-60 flex-col justify-between bg-white shadow-xl">
+          <aside className="absolute inset-y-0 left-0 flex w-60 flex-col justify-between overflow-y-auto bg-white shadow-xl">
             <div>
               <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
               <Nav onNavigate={() => setOpen(false)} />
             </div>
-            <SidebarFooter source={source} sheetUrl={sheetUrl} />
+            {footer}
           </aside>
         </div>
       )}
@@ -146,10 +209,23 @@ export function AppShell({
           </div>
         )}
 
-        <main className="min-w-0 flex-1 p-4 md:p-6">
-          <ToastProvider>{children}</ToastProvider>
-        </main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
+
+      {modal && (
+        <ShortcutFormModal
+          shortcut={modal.shortcut}
+          onClose={() => setModal(null)}
+          onSaved={(s) => {
+            setShortcuts((l) => upsert(l, s));
+            setModal(null);
+          }}
+          onDeleted={(id) => {
+            setShortcuts((l) => l.filter((s) => s.id !== id));
+            setModal(null);
+          }}
+        />
+      )}
     </div>
   );
 }

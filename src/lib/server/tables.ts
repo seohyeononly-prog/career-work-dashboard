@@ -7,6 +7,7 @@ import {
   type DateRange,
   type LinkItem,
   type Schedule,
+  type Shortcut,
   type Task,
 } from "../types";
 
@@ -99,4 +100,11 @@ export const LinksTable: TableDef<LinkItem> = {
           order: Number(r[7]) || 0,
         }
       : null,
+};
+
+export const ShortcutsTable: TableDef<Shortcut> = {
+  sheet: "Shortcuts",
+  headers: ["버튼 ID", "버튼명", "URL"],
+  toRow: (s) => [s.id, s.name, s.url],
+  fromRow: (r) => (r[0]?.trim() ? { id: r[0].trim(), name: r[1] ?? "", url: (r[2] ?? "").trim() } : null),
 };
