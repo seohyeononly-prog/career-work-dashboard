@@ -30,6 +30,7 @@ export function useTasks(initial: Task[]) {
   const toggle = (task: Task, done: boolean) => changeStatus(task, done ? "완료" : "대기");
 
   const save = (t: Task) => setTasks((l) => upsert(l, t));
+  const remove = (id: string) => setTasks((l) => l.filter((t) => t.id !== id));
 
   /** 드래그로 정한 순서(ids)를 1, 2, 3… 으로 저장한다 */
   const reorder = async (ids: string[]) => {
@@ -45,5 +46,5 @@ export function useTasks(initial: Task[]) {
     }
   };
 
-  return { tasks, busyId, error, toggle, changeStatus, save, reorder };
+  return { tasks, busyId, error, toggle, changeStatus, save, remove, reorder };
 }

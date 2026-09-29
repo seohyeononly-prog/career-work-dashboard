@@ -22,7 +22,7 @@ export function HomeView({
   schedules: Schedule[];
   links: LinkItem[];
 }) {
-  const { tasks, busyId, error, toggle, save } = useTasks(initialTasks);
+  const { tasks, busyId, error, toggle, save, remove } = useTasks(initialTasks);
   const [editing, setEditing] = useState<Task | null>(null);
   const today = todayStr();
 
@@ -204,6 +204,10 @@ export function HomeView({
           onClose={() => setEditing(null)}
           onSaved={(t) => {
             save(t);
+            setEditing(null);
+          }}
+          onDeleted={(id) => {
+            remove(id);
             setEditing(null);
           }}
         />

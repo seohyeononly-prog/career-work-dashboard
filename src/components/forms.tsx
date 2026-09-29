@@ -35,9 +35,30 @@ function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
   return { saving, error, submit };
 }
 
-function Footer({ saving, onClose }: { saving: boolean; onClose: () => void }) {
+function Footer({
+  saving,
+  onClose,
+  onDelete,
+  deleting,
+}: {
+  saving: boolean;
+  onClose: () => void;
+  onDelete?: () => void;
+  deleting?: boolean;
+}) {
   return (
     <div className="flex justify-end gap-2 pt-2">
+      {onDelete && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="mr-auto text-rose-600! hover:bg-rose-50!"
+          onClick={onDelete}
+          disabled={saving || deleting}
+        >
+          {deleting ? "삭제 중…" : "삭제"}
+        </Button>
+      )}
       <Button type="button" onClick={onClose}>
         취소
       </Button>
@@ -108,6 +129,7 @@ function ItemForm<T>({
   save,
   onClose,
   onSaved,
+  remove,
 }: {
   kind: "업무" | "일정";
   initial: Draft;
@@ -115,10 +137,27 @@ function ItemForm<T>({
   save: (v: Draft) => Promise<T>;
   onClose: () => void;
   onSaved: (v: T) => void;
+  /** 있으면 삭제 버튼을 보여준다 */
+  remove?: () => Promise<void>;
 }) {
   const [v, setV] = useState<Draft>(initial);
   const set = (p: Partial<Draft>) => setV((s) => ({ ...s, ...p }));
-  const { saving, error, submit } = useSubmit(() => save(v), onSaved);
+  const { saving, error: saveError, submit } = useSubmit(() => save(v), onSaved);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const error = saveError || deleteError;
+
+  const onDelete = async () => {
+    if (!remove || !window.confirm(`"${initial.title}" ${kind}를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await remove();
+    } catch (err) {
+      setDeleteError((err as Error).message);
+      setDeleting(false);
+    }
+  };
 
   return (
     <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
@@ -131,7 +170,7 @@ function ItemForm<T>({
         </Field>
         <DateRangeFields value={v} onChange={set} />
         {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} />
+        <Footer saving={saving} onClose={onClose} onDelete={remove && onDelete} deleting={deleting} />
       </form>
     </Modal>
   );
@@ -149,12 +188,14 @@ export function TaskFormModal({
   defaultCategory,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   task?: Task;
   defaultDate?: string;
   defaultCategory?: Category;
   onClose: () => void;
   onSaved: (t: Task) => void;
+  onDeleted?: (id: string) => void;
 }) {
   return (
     <ItemForm
@@ -164,6 +205,14 @@ export function TaskFormModal({
       save={(v) => (task ? api.updateTask(task.id, v) : api.createTask({ ...v, status: "대기" }))}
       onClose={onClose}
       onSaved={onSaved}
+      remove={
+        task && onDeleted
+          ? async () => {
+              await api.deleteTask(task.id);
+              onDeleted(task.id);
+            }
+          : undefined
+      }
     />
   );
 }

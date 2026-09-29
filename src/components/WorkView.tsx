@@ -75,7 +75,7 @@ export function WorkView({
   initialMode: CalendarMode;
 }) {
   const today = todayStr();
-  const { tasks, busyId, error, toggle, save, reorder } = useTasks(initialTasks);
+  const { tasks, busyId, error, toggle, save, remove, reorder } = useTasks(initialTasks);
   const [schedules, setSchedules] = useState(initialSchedules);
   const [date, setDate] = useState(today);
   const [ym, setYm] = useState(ymOf(today));
@@ -312,6 +312,10 @@ export function WorkView({
           onClose={() => setModal(null)}
           onSaved={(t) => {
             save(t);
+            setModal(null);
+          }}
+          onDeleted={(id) => {
+            remove(id);
             setModal(null);
           }}
         />

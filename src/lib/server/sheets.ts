@@ -160,3 +160,22 @@ export async function updateColumn<T extends { id: string }>(
   });
   if (data.length) await call("/values:batchUpdate", "POST", { valueInputOption: "RAW", data });
 }
+
+/** ID로 행을 찾아 시트에서 통째로 지운다 */
+export async function deleteRow<T extends { id: string }>(def: TableDef<T>, id: string) {
+  const [ids, meta] = await Promise.all([
+    call<{ values?: string[][] }>(`/values/${encodeURIComponent(`${def.sheet}!A:A`)}`),
+    call<{ sheets: { properties: { sheetId: number; title: string } }[] }>(
+      "?fields=sheets.properties(sheetId,title)",
+    ),
+  ]);
+  const index = (ids.values ?? []).findIndex((r) => r[0]?.trim() === id);
+  if (index < 1) throw new Error(`${def.sheet} 탭에서 ID ${id}를 찾을 수 없습니다.`);
+  const sheetId = meta.sheets.find((s) => s.properties.title === def.sheet)?.properties.sheetId;
+  if (sheetId === undefined) throw new Error(`${def.sheet} 탭을 찾을 수 없습니다.`);
+  await call(":batchUpdate", "POST", {
+    requests: [
+      { deleteDimension: { range: { sheetId, dimension: "ROWS", startIndex: index, endIndex: index + 1 } } },
+    ],
+  });
+}

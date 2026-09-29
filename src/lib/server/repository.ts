@@ -6,7 +6,7 @@ import type { DataSource, LinkItem, Schedule, Task } from "../types";
 import type { z } from "zod";
 import { firstIssue, linkInputSchema, scheduleInputSchema, taskInputSchema } from "../validation";
 import { createDevData } from "./dev-data";
-import { appendRow, ensureSheets, isSheetsConfigured, readAll, updateColumn, updateRow } from "./sheets";
+import { appendRow, deleteRow, ensureSheets, isSheetsConfigured, readAll, updateColumn, updateRow } from "./sheets";
 import { LinksTable, SchedulesTable, TasksTable, type TableDef } from "./tables";
 
 // 데이터 접근 계층. 환경변수가 설정되어 있으면 Google Sheets,
@@ -80,7 +80,20 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
     return found;
   }
 
-  return { list, insert, replace, get, invalidate };
+  async function remove(id: string): Promise<void> {
+    if (getDataSource() === "dev") {
+      const arr = devList();
+      const i = arr.findIndex((x) => x.id === id);
+      if (i < 0) throw new NotFoundError("항목을 찾을 수 없습니다.");
+      arr.splice(i, 1);
+    } else {
+      await ensureSheets(ALL_TABLES);
+      await deleteRow(def, id);
+      invalidate();
+    }
+  }
+
+  return { list, insert, replace, get, remove, invalidate };
 }
 
 const tasksRepo = makeRepo(TasksTable, "tasks");
@@ -104,6 +117,11 @@ export async function createTask(input: unknown): Promise<Task> {
   // 새 업무는 칸반 맨 위: 지금 가장 작은 순서보다 1 작게 (0은 '순서 없음'이라 항상 -1 이하)
   const order = Math.min(0, ...(await tasksRepo.list()).map((t) => t.order)) - 1;
   return tasksRepo.insert({ id: newId("T"), ...data, order, createdAt: now, updatedAt: now });
+}
+
+export async function deleteTask(id: string): Promise<{ ok: true }> {
+  await tasksRepo.remove(id);
+  return { ok: true };
 }
 
 /** 칸반 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 수정일은 바꾸지 않는다. */
