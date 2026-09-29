@@ -1,6 +1,7 @@
 import "server-only";
 import {
   CATEGORIES,
+  LINK_CATEGORIES,
   SERVICE_TYPES,
   TASK_STATUSES,
   type DateRange,
@@ -90,7 +91,7 @@ export const LinksTable: TableDef<LinkItem> = {
           id: r[0].trim(),
           name: r[1] ?? "",
           url: (r[2] ?? "").trim(),
-          category: oneOf(CATEGORIES, r[3], "취업운영"),
+          category: oneOf(LINK_CATEGORIES, r[3], "취업운영"),
           service: oneOf(SERVICE_TYPES, r[4], "기타"),
           description: r[5] ?? "",
           favorite: truthy(r[6]),

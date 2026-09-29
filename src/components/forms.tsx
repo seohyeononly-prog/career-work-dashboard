@@ -5,8 +5,10 @@ import { api } from "@/lib/client-api";
 import { addDays, todayStr } from "@/lib/date";
 import {
   CATEGORIES,
+  LINK_CATEGORIES,
   SERVICE_TYPES,
   type Category,
+  type LinkCategory,
   type DateRange,
   type LinkInput,
   type LinkItem,
@@ -198,7 +200,7 @@ export function LinkFormModal({
   onSaved,
 }: {
   link?: LinkItem;
-  category: Category;
+  category: LinkCategory;
   onClose: () => void;
   onSaved: (l: LinkItem) => void;
 }) {
@@ -234,7 +236,7 @@ export function LinkFormModal({
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="카테고리">
-            <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
+            <Select value={v.category} options={LINK_CATEGORIES} onChange={(category) => set({ category })} />
           </Field>
           <Field label="서비스 종류">
             <Select value={v.service} options={SERVICE_TYPES} onChange={(service) => set({ service })} />

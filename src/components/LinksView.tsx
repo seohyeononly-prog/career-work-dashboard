@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { api, upsert } from "@/lib/client-api";
-import { SERVICE_TYPES, type Category, type LinkItem, type ServiceType } from "@/lib/types";
+import { SERVICE_TYPES, type LinkCategory, type LinkItem, type ServiceType } from "@/lib/types";
 import { LinkFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
 import { Button, Empty, ErrorNote, PageHeader, Select, cn } from "./ui";
 
-export function LinksView({ category, initialLinks }: { category: Category; initialLinks: LinkItem[] }) {
+export function LinksView({ category, initialLinks }: { category: LinkCategory; initialLinks: LinkItem[] }) {
   const [links, setLinks] = useState(initialLinks);
   const [service, setService] = useState<ServiceType | "전체">("전체");
   const [modal, setModal] = useState<{ link?: LinkItem } | null>(null);

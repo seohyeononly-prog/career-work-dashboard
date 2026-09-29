@@ -1,7 +1,12 @@
 // 공통 타입과 상수. 서버·클라이언트 양쪽에서 사용한다.
 
-export const CATEGORIES = ["취업운영", "일경험"] as const;
+/** 업무·일정 카테고리 */
+export const CATEGORIES = ["취업운영", "일경험", "기타"] as const;
 export type Category = (typeof CATEGORIES)[number];
+
+/** 링크 카테고리 (링크 화면이 두 개로 나뉘어 있어 기타는 없음) */
+export const LINK_CATEGORIES = ["취업운영", "일경험"] as const;
+export type LinkCategory = (typeof LINK_CATEGORIES)[number];
 
 export const TASK_STATUSES = ["대기", "완료"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -37,7 +42,7 @@ export interface LinkItem {
   id: string;
   name: string;
   url: string;
-  category: Category;
+  category: LinkCategory;
   service: ServiceType;
   description: string;
   favorite: boolean;
@@ -56,9 +61,9 @@ export const rangeEnd = (r: DateRange) => r.endDate || r.startDate;
 export const covers = (r: DateRange, day: string) => r.startDate <= day && rangeEnd(r) >= day;
 
 /** 링크 화면 URL 경로(slug)와 카테고리 매핑 */
-export const CATEGORY_SLUGS: Record<string, Category> = {
+export const CATEGORY_SLUGS: Record<string, LinkCategory> = {
   employment: "취업운영",
   "work-experience": "일경험",
 };
-export const slugOf = (c: Category) =>
+export const slugOf = (c: LinkCategory) =>
   c === "취업운영" ? "employment" : "work-experience";

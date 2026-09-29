@@ -1,7 +1,7 @@
 "use client";
 
 import { WEEKDAYS, monthGrid, shortDate, todayStr } from "@/lib/date";
-import { covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
 import { Button, CATEGORY_STYLE, cn } from "./ui";
 
 export type CalendarMode = "task" | "schedule";
@@ -214,12 +214,11 @@ export function CalendarPanel({
 function Legend() {
   return (
     <>
-      <span className="flex items-center gap-1">
-        <span className={cn("h-2 w-2 rounded-full", CATEGORY_STYLE["취업운영"].dot)} /> 취업운영
-      </span>
-      <span className="flex items-center gap-1">
-        <span className={cn("h-2 w-2 rounded-full", CATEGORY_STYLE["일경험"].dot)} /> 일경험
-      </span>
+      {CATEGORIES.map((c) => (
+        <span key={c} className="flex items-center gap-1">
+          <span className={cn("h-2 w-2 rounded-full", CATEGORY_STYLE[c].dot)} /> {c}
+        </span>
+      ))}
     </>
   );
 }

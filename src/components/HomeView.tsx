@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, TASK_STATUSES, rangeEnd, slugOf, type LinkItem, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, slugOf, type LinkItem, type Schedule, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
 import { CompleteCheckbox, DueBadge } from "./TaskItem";
@@ -128,7 +128,8 @@ export function HomeView({
 
         <Card title="카테고리별 진행 상황">
           <div className="space-y-4">
-            {CATEGORIES.map((c) => {
+            {/* 기타는 해당 업무가 있을 때만 표시 */}
+            {CATEGORIES.filter((c) => c !== "기타" || tasks.some((t) => t.category === c)).map((c) => {
               const list = tasks.filter((t) => t.category === c);
               const done = list.filter((t) => t.status === "완료").length;
               const pct = list.length ? Math.round((done / list.length) * 100) : 0;
@@ -161,7 +162,7 @@ export function HomeView({
 
         <Card title="자주 보는 링크" className="lg:col-span-3">
           <div className="grid gap-4 md:grid-cols-2">
-            {CATEGORIES.map((c) => {
+            {LINK_CATEGORIES.map((c) => {
               const list = favorites.filter((l) => l.category === c);
               return (
                 <div key={c}>

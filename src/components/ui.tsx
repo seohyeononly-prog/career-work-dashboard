@@ -10,6 +10,7 @@ export function cn(...c: (string | false | null | undefined)[]) {
 export const CATEGORY_STYLE: Record<Category, { dot: string; badge: string; bar: string }> = {
   취업운영: { dot: "bg-indigo-500", badge: "bg-indigo-50 text-indigo-700", bar: "bg-indigo-500" },
   일경험: { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700", bar: "bg-emerald-500" },
+  기타: { dot: "bg-amber-500", badge: "bg-amber-50 text-amber-800", bar: "bg-amber-500" },
 };
 
 export function Badge({ className, children }: { className?: string; children: ReactNode }) {
