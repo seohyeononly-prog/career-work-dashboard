@@ -82,5 +82,10 @@ export interface Shortcut {
   id: string;
   name: string;
   url: string;
+  /** 사이드바 순서(작을수록 위). 0이면 아직 정하지 않은 것(맨 아래) */
+  order: number;
 }
-export type ShortcutInput = Omit<Shortcut, "id">;
+export type ShortcutInput = Omit<Shortcut, "id" | "order">;
+
+/** 사이드바 버튼 순서: 드래그로 정한 순서 → 추가한 순서 */
+export const byShortcutOrder = (a: Shortcut, b: Shortcut) => (a.order || Infinity) - (b.order || Infinity);

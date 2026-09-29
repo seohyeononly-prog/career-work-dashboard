@@ -134,7 +134,7 @@ export async function deleteTask(id: string): Promise<{ ok: true }> {
 /** 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 순서 열만 바꾼다. */
 async function reorder<T extends { id: string; order: number }>(
   def: TableDef<T>,
-  devKey: "tasks" | "links",
+  devKey: "tasks" | "links" | "shortcuts",
   invalidate: () => void,
   input: unknown,
   what: string,
@@ -211,14 +211,19 @@ export const listShortcuts = () => shortcutsRepo.list();
 
 export async function createShortcut(input: unknown): Promise<Shortcut> {
   const data = parse(shortcutInputSchema, input);
-  return shortcutsRepo.insert({ id: newId("B"), ...data });
+  // 새 버튼은 순서 0 → 맨 아래
+  return shortcutsRepo.insert({ id: newId("B"), ...data, order: 0 });
 }
 
 export async function updateShortcut(id: string, patch: unknown): Promise<Shortcut> {
   const current = await shortcutsRepo.get(id);
   const data = parse(shortcutInputSchema, { ...current, ...(patch as object) });
-  return shortcutsRepo.replace({ ...data, id });
+  return shortcutsRepo.replace({ ...current, ...data, id });
 }
+
+/** 사이드바 버튼 드래그 결과 */
+export const reorderShortcuts = (input: unknown) =>
+  reorder(ShortcutsTable, "shortcuts", shortcutsRepo.invalidate, input, "버튼");
 
 export async function deleteShortcut(id: string): Promise<{ ok: true }> {
   await shortcutsRepo.remove(id);

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { upsert } from "@/lib/client-api";
-import type { DataSource, Shortcut } from "@/lib/types";
+import { api, upsert } from "@/lib/client-api";
+import { byShortcutOrder, type DataSource, type Shortcut } from "@/lib/types";
 import { ShortcutFormModal } from "./forms";
-import { ToastProvider } from "./Toast";
+import { ToastProvider, useToast } from "./Toast";
 import { cn } from "./ui";
 
 const NAV = [
@@ -71,35 +71,82 @@ function SidebarFooter({
   shortcuts,
   onAdd,
   onEdit,
+  onReorder,
 }: {
   source: DataSource;
   sheetUrl: string | null;
   shortcuts: Shortcut[];
   onAdd: () => void;
   onEdit: (s: Shortcut) => void;
+  /** 드래그로 바꾼 순서(ids) */
+  onReorder: (ids: string[]) => void;
 }) {
+  const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
+  const list = [...shortcuts].sort(byShortcutOrder);
+
+  /** 끌던 버튼을 대상 버튼 앞/뒤로 옮긴다 */
+  const dropOn = (target: Shortcut, after: boolean) => {
+    const moving = list.find((x) => x.id === drag?.id);
+    setDrag(null);
+    if (!moving || moving.id === target.id) return;
+    const rest = list.filter((x) => x.id !== moving.id);
+    const at = rest.findIndex((x) => x.id === target.id) + (after ? 1 : 0);
+    const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
+    if (next.every((x, i) => x.id === list[i].id && x.order === i + 1)) return;
+    onReorder(next.map((x) => x.id));
+  };
+
   return (
     <div className="mx-3 mb-4 space-y-1.5">
       <a href={FLEX_URL} target="_blank" rel="noopener noreferrer" className={shortcutCls}>
         flex 열기
         <span aria-hidden>↗</span>
       </a>
-      {shortcuts.map((s) => (
-        <div key={s.id} className="group flex items-center gap-1">
-          <a href={s.url} target="_blank" rel="noopener noreferrer" className={shortcutCls}>
-            <span className="truncate">{s.name}</span>
-            <span aria-hidden>↗</span>
-          </a>
-          <button
-            onClick={() => onEdit(s)}
-            aria-label={`${s.name} 버튼 수정`}
-            title="수정"
-            className="rounded px-1 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+      {list.map((s) => {
+        const over = drag?.over?.id === s.id ? drag.over : null;
+        return (
+          <div
+            key={s.id}
+            draggable
+            title="끌어서 순서 바꾸기"
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              setDrag({ id: s.id });
+            }}
+            onDragEnd={() => setDrag(null)}
+            onDragOver={(e) => {
+              if (!drag || drag.id === s.id) return;
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              const after = e.clientY > r.top + r.height / 2;
+              if (over?.after !== after) setDrag({ id: drag.id, over: { id: s.id, after } });
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (over) dropOn(s, over.after);
+            }}
+            className={cn(
+              "group flex cursor-grab items-center gap-1 rounded-md active:cursor-grabbing",
+              drag?.id === s.id && "opacity-40",
+              over && (over.after ? "shadow-[0_2px_0_var(--color-indigo-500)]" : "shadow-[0_-2px_0_var(--color-indigo-500)]"),
+            )}
           >
-            ✎
-          </button>
-        </div>
-      ))}
+            {/* 링크 자체를 끌면 주소가 끌려가므로 버튼 줄 전체가 끌리도록 막는다 */}
+            <a href={s.url} target="_blank" rel="noopener noreferrer" draggable={false} className={shortcutCls}>
+              <span className="truncate">{s.name}</span>
+              <span aria-hidden>↗</span>
+            </a>
+            <button
+              onClick={() => onEdit(s)}
+              aria-label={`${s.name} 버튼 수정`}
+              title="수정"
+              className="rounded px-1 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+            >
+              ✎
+            </button>
+          </div>
+        );
+      })}
       <button
         onClick={onAdd}
         title="사이드바 버튼 추가"
@@ -154,6 +201,20 @@ function Shell({
   const [open, setOpen] = useState(false);
   const [shortcuts, setShortcuts] = useState(initialShortcuts);
   const [modal, setModal] = useState<{ shortcut?: Shortcut } | null>(null);
+  const toast = useToast();
+
+  /** 드래그로 정한 순서를 1, 2, 3… 으로 저장. 먼저 화면에 반영하고 실패하면 되돌린다. */
+  const reorder = async (ids: string[]) => {
+    const prev = shortcuts;
+    const order = new Map(ids.map((id, i) => [id, i + 1]));
+    setShortcuts((l) => l.map((s) => (order.has(s.id) ? { ...s, order: order.get(s.id)! } : s)));
+    try {
+      await api.reorderShortcuts(ids);
+    } catch (e) {
+      setShortcuts(prev);
+      toast((e as Error).message, "error");
+    }
+  };
 
   const footer = (
     <SidebarFooter
@@ -162,6 +223,7 @@ function Shell({
       shortcuts={shortcuts}
       onAdd={() => setModal({})}
       onEdit={(shortcut) => setModal({ shortcut })}
+      onReorder={reorder}
     />
   );
 

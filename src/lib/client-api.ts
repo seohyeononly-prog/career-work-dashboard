@@ -33,6 +33,7 @@ export const api = {
     request<Shortcut>(`/api/shortcuts/${encodeURIComponent(id)}`, "PATCH", v),
   deleteShortcut: (id: string) =>
     request<{ ok: true }>(`/api/shortcuts/${encodeURIComponent(id)}`, "DELETE"),
+  reorderShortcuts: (ids: string[]) => request<{ ok: true }>("/api/shortcuts/order", "PUT", { ids }),
 };
 
 /** 목록에서 같은 ID 항목을 교체하거나 새로 추가 */

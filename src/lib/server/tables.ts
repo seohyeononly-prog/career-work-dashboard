@@ -104,7 +104,10 @@ export const LinksTable: TableDef<LinkItem> = {
 
 export const ShortcutsTable: TableDef<Shortcut> = {
   sheet: "Shortcuts",
-  headers: ["버튼 ID", "버튼명", "URL"],
-  toRow: (s) => [s.id, s.name, s.url],
-  fromRow: (r) => (r[0]?.trim() ? { id: r[0].trim(), name: r[1] ?? "", url: (r[2] ?? "").trim() } : null),
+  headers: ["버튼 ID", "버튼명", "URL", "순서"],
+  toRow: (s) => [s.id, s.name, s.url, s.order ? String(s.order) : ""],
+  fromRow: (r) =>
+    r[0]?.trim()
+      ? { id: r[0].trim(), name: r[1] ?? "", url: (r[2] ?? "").trim(), order: Number(r[3]) || 0 }
+      : null,
 };

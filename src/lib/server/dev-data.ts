@@ -130,7 +130,7 @@ export function createDevData(): {
     },
   ];
 
-  const shortcuts: Shortcut[] = [{ id: "dev-shortcut-1", name: "Gmail", url: "https://mail.google.com/" }];
+  const shortcuts: Shortcut[] = [{ id: "dev-shortcut-1", name: "Gmail", url: "https://mail.google.com/", order: 0 }];
 
   return { tasks, schedules, links, shortcuts };
 }
