@@ -2,19 +2,16 @@
 
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/client-api";
-import { fromInputDateTime, toInputDateTime, todayStr } from "@/lib/date";
+import { addDays, todayStr } from "@/lib/date";
 import {
   CATEGORIES,
-  PRIORITIES,
   SERVICE_TYPES,
-  TASK_STATUSES,
   type Category,
+  type DateRange,
   type LinkInput,
   type LinkItem,
   type Schedule,
-  type ScheduleInput,
   type Task,
-  type TaskInput,
 } from "@/lib/types";
 import { Button, ErrorNote, Field, Modal, Select, inputCls } from "./ui";
 
@@ -49,59 +46,123 @@ function Footer({ saving, onClose }: { saving: boolean; onClose: () => void }) {
   );
 }
 
-// ---------- 업무 ----------
-export function TaskFormModal({
-  task,
-  defaults,
+/** 날짜 + "기간" 체크박스. 체크하면 종료일을 고를 수 있다. */
+function DateRangeFields({ value, onChange }: { value: DateRange; onChange: (v: DateRange) => void }) {
+  const isPeriod = value.endDate !== "";
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end gap-2">
+        <Field label={isPeriod ? "시작일" : "날짜"}>
+          <input
+            type="date"
+            className={inputCls}
+            value={value.startDate}
+            onChange={(e) => {
+              const startDate = e.target.value;
+              // 시작일을 종료일 뒤로 옮기면 종료일도 따라간다
+              onChange({ startDate, endDate: isPeriod && value.endDate < startDate ? startDate : value.endDate });
+            }}
+            required
+          />
+        </Field>
+        {isPeriod && (
+          <>
+            <span className="pb-2 text-slate-400">~</span>
+            <Field label="종료일">
+              <input
+                type="date"
+                className={inputCls}
+                value={value.endDate}
+                min={value.startDate}
+                onChange={(e) => onChange({ ...value, endDate: e.target.value })}
+                required
+              />
+            </Field>
+          </>
+        )}
+      </div>
+      <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-indigo-600"
+          checked={isPeriod}
+          onChange={(e) =>
+            onChange({ ...value, endDate: e.target.checked ? addDays(value.startDate || todayStr(), 1) : "" })
+          }
+        />
+        기간
+      </label>
+    </div>
+  );
+}
+
+type Draft = { title: string; category: Category } & DateRange;
+
+/** 업무·일정 공용 입력 폼: 이름, 카테고리, 날짜(기간) */
+function ItemForm<T>({
+  kind,
+  initial,
+  isEdit,
+  save,
   onClose,
   onSaved,
 }: {
-  task?: Task;
-  defaults?: Partial<TaskInput>;
+  kind: "업무" | "일정";
+  initial: Draft;
+  isEdit: boolean;
+  save: (v: Draft) => Promise<T>;
   onClose: () => void;
-  onSaved: (t: Task) => void;
+  onSaved: (v: T) => void;
 }) {
-  const [v, setV] = useState<TaskInput>({
-    title: task?.title ?? "",
-    category: task?.category ?? defaults?.category ?? "취업운영",
-    status: task?.status ?? defaults?.status ?? "대기",
-    dueDate: task?.dueDate ?? defaults?.dueDate ?? todayStr(),
-    priority: task?.priority ?? "보통",
-    description: task?.description ?? "",
-  });
-  const set = (p: Partial<TaskInput>) => setV((s) => ({ ...s, ...p }));
-  const { saving, error, submit } = useSubmit(
-    () => (task ? api.updateTask(task.id, v) : api.createTask(v)),
-    onSaved,
-  );
+  const [v, setV] = useState<Draft>(initial);
+  const set = (p: Partial<Draft>) => setV((s) => ({ ...s, ...p }));
+  const { saving, error, submit } = useSubmit(() => save(v), onSaved);
 
   return (
-    <Modal title={task ? "업무 수정" : "새 업무"} onClose={onClose}>
+    <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <Field label="업무명">
+        <Field label={`${kind}명`}>
           <input className={inputCls} value={v.title} onChange={(e) => set({ title: e.target.value })} required autoFocus />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="카테고리">
-            <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
-          </Field>
-          <Field label="상태">
-            <Select value={v.status} options={TASK_STATUSES} onChange={(status) => set({ status })} />
-          </Field>
-          <Field label="마감일">
-            <input type="date" className={inputCls} value={v.dueDate} onChange={(e) => set({ dueDate: e.target.value })} required />
-          </Field>
-          <Field label="중요도">
-            <Select value={v.priority} options={PRIORITIES} onChange={(priority) => set({ priority })} />
-          </Field>
-        </div>
-        <Field label="설명">
-          <textarea className={inputCls} rows={3} value={v.description} onChange={(e) => set({ description: e.target.value })} />
+        <Field label="카테고리">
+          <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
         </Field>
+        <DateRangeFields value={v} onChange={set} />
         {error && <ErrorNote message={error} />}
         <Footer saving={saving} onClose={onClose} />
       </form>
     </Modal>
+  );
+}
+
+const draftOf = (item: Draft | undefined, defaults: { category?: Category; date?: string }): Draft =>
+  item
+    ? { title: item.title, category: item.category, startDate: item.startDate, endDate: item.endDate }
+    : { title: "", category: defaults.category ?? "취업운영", startDate: defaults.date ?? todayStr(), endDate: "" };
+
+// ---------- 업무 ----------
+export function TaskFormModal({
+  task,
+  defaultDate,
+  defaultCategory,
+  onClose,
+  onSaved,
+}: {
+  task?: Task;
+  defaultDate?: string;
+  defaultCategory?: Category;
+  onClose: () => void;
+  onSaved: (t: Task) => void;
+}) {
+  return (
+    <ItemForm
+      kind="업무"
+      isEdit={!!task}
+      initial={draftOf(task, { category: defaultCategory, date: defaultDate })}
+      save={(v) => (task ? api.updateTask(task.id, v) : api.createTask({ ...v, status: "대기" }))}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
 
@@ -117,63 +178,15 @@ export function ScheduleFormModal({
   onClose: () => void;
   onSaved: (s: Schedule) => void;
 }) {
-  const day = defaultDate ?? todayStr();
-  const [v, setV] = useState<ScheduleInput>({
-    title: schedule?.title ?? "",
-    category: schedule?.category ?? "취업운영",
-    start: schedule?.start ?? `${day} 10:00`,
-    end: schedule?.end ?? `${day} 11:00`,
-    location: schedule?.location ?? "",
-    description: schedule?.description ?? "",
-  });
-  const set = (p: Partial<ScheduleInput>) => setV((s) => ({ ...s, ...p }));
-  const { saving, error, submit } = useSubmit(
-    () => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v)),
-    onSaved,
-  );
-
   return (
-    <Modal title={schedule ? "일정 수정" : "새 일정"} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <Field label="일정명">
-          <input className={inputCls} value={v.title} onChange={(e) => set({ title: e.target.value })} required autoFocus />
-        </Field>
-        <Field label="카테고리">
-          <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
-        </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="시작일시">
-            <input
-              type="datetime-local"
-              className={inputCls}
-              value={toInputDateTime(v.start)}
-              onChange={(e) => {
-                const start = fromInputDateTime(e.target.value);
-                set(start > v.end ? { start, end: start } : { start });
-              }}
-              required
-            />
-          </Field>
-          <Field label="종료일시">
-            <input
-              type="datetime-local"
-              className={inputCls}
-              value={toInputDateTime(v.end)}
-              onChange={(e) => set({ end: fromInputDateTime(e.target.value) })}
-              required
-            />
-          </Field>
-        </div>
-        <Field label="장소">
-          <input className={inputCls} value={v.location} onChange={(e) => set({ location: e.target.value })} />
-        </Field>
-        <Field label="설명">
-          <textarea className={inputCls} rows={3} value={v.description} onChange={(e) => set({ description: e.target.value })} />
-        </Field>
-        {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} />
-      </form>
-    </Modal>
+    <ItemForm
+      kind="일정"
+      isEdit={!!schedule}
+      initial={draftOf(schedule, { date: defaultDate })}
+      save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
 

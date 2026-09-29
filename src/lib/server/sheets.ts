@@ -20,16 +20,46 @@ const g = globalThis as unknown as {
   __sheetsReady?: Promise<void>;
 };
 
+/**
+ * 붙여 넣는 방식에 따라 달라지는 키 형식을 PEM 형식으로 정리한다.
+ * - 값 전체를 감싼 따옴표 (Vercel에 "..." 째로 붙여 넣은 경우)
+ * - 줄바꿈이 "\n" 또는 "\\n" 문자열로 들어간 경우
+ * - Windows 줄바꿈(\r\n)
+ */
+export function normalizePrivateKey(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^(["'])([\s\S]*)\1$/, "$2")
+    .replace(/\\+r/g, "")
+    .replace(/\\+n/g, "\n")
+    .replace(/\\+\n/g, "\n")
+    .replace(/\r/g, "");
+}
+
 function client(): JWT {
   if (!g.__sheetsClient) {
     g.__sheetsClient = new JWT({
-      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      // Vercel 등에서 한 줄로 입력한 경우 "\n" 문자열을 실제 줄바꿈으로 복원
-      key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim(),
+      key: normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY!),
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
   }
   return g.__sheetsClient;
+}
+
+/** 자주 나오는 인증 오류를 설정 안내 문구로 바꾼다 */
+function explain(detail: string): string {
+  if (/DECODER|PEM|asn1|private key/i.test(detail))
+    return "GOOGLE_PRIVATE_KEY 형식이 올바르지 않습니다. 서비스 계정 JSON의 private_key 값을 그대로 붙여 넣어 주세요.";
+  if (/invalid_grant|account not found/i.test(detail))
+    return "서비스 계정 이메일 또는 키가 맞지 않습니다. 같은 JSON 파일의 client_email과 private_key인지 확인해 주세요.";
+  if (/permission|PERMISSION_DENIED|does not have/i.test(detail))
+    return "스프레드시트에 접근 권한이 없습니다. 시트를 서비스 계정 이메일에 편집자로 공유해 주세요.";
+  if (/not found|NOT_FOUND/i.test(detail))
+    return "스프레드시트를 찾을 수 없습니다. GOOGLE_SHEETS_SPREADSHEET_ID를 확인해 주세요.";
+  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(detail))
+    return "Google Sheets API가 사용 설정되지 않았습니다. Google Cloud 콘솔에서 사용 설정해 주세요.";
+  return detail;
 }
 
 async function call<T>(path: string, method: "GET" | "POST" | "PUT" = "GET", data?: unknown): Promise<T> {
@@ -41,7 +71,8 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT" = "GET", dat
     const detail =
       (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
         ?.message ?? (e as Error).message;
-    throw new Error(`Google Sheets 요청 실패: ${detail}`);
+    const hint = explain(detail);
+    throw new Error(`Google Sheets 요청 실패: ${hint === detail ? detail : `${hint} (${detail})`}`);
   }
 }
 

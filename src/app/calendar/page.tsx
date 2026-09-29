@@ -1,21 +1,7 @@
-import type { Metadata } from "next";
-import { CalendarView } from "@/components/CalendarView";
-import { LoadError } from "@/components/LoadError";
-import { load } from "@/lib/server/load";
-import { listSchedules, listTasks } from "@/lib/server/repository";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "캘린더 · 업무 대시보드" };
-
+// 캘린더는 칸반보드 화면 오른쪽으로 합쳐졌다. 예전 주소는 그대로 넘겨준다.
 export default async function CalendarPage(props: PageProps<"/calendar">) {
   const { view } = await props.searchParams;
-  const res = await load(() => Promise.all([listTasks(), listSchedules()]));
-  if (!res.ok) return <LoadError message={res.error} />;
-  const [tasks, schedules] = res.data;
-  return (
-    <CalendarView
-      initialTasks={tasks}
-      initialSchedules={schedules}
-      initialMode={view === "schedule" ? "schedule" : "task"}
-    />
-  );
+  redirect(view === "schedule" ? "/kanban?view=schedule" : "/kanban");
 }

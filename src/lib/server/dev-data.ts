@@ -11,67 +11,60 @@ export function createDevData(): { tasks: Task[]; schedules: Schedule[]; links: 
   const d = (n: number) => addDays(t, n);
   const now = nowStr();
 
+  // endOffset을 주면 기간 업무/일정
   const task = (
     id: number,
     title: string,
     category: Task["category"],
     status: Task["status"],
-    dueOffset: number,
-    priority: Task["priority"],
-    description = "",
+    startOffset: number,
+    endOffset?: number,
   ): Task => ({
     id: `dev-task-${id}`,
     title,
     category,
     status,
-    dueDate: d(dueOffset),
-    priority,
-    description,
+    startDate: d(startOffset),
+    endDate: endOffset === undefined ? "" : d(endOffset),
     createdAt: now,
     updatedAt: now,
   });
 
   const tasks: Task[] = [
-    task(1, "수료식 준비", "취업운영", "대기", 0, "높음", "좌석 배치, 수료증 출력 확인"),
-    task(2, "수료보고 정리", "취업운영", "대기", 0, "보통"),
-    task(3, "동기야고마워 메일 발송 세팅", "취업운영", "진행 중", 1, "보통"),
-    task(4, "취업운영 OT 진행", "취업운영", "완료", -1, "높음"),
-    task(5, "헬스케어 취업운영 OT 모니터링", "취업운영", "완료", -2, "낮음"),
-    task(6, "수강생 상담일지 공유", "취업운영", "대기", -2, "보통", "지난주 상담 내용 정리 후 공유"),
-    task(7, "일경험 인수인계", "일경험", "진행 중", 2, "높음"),
-    task(8, "일경험 참여기업 매칭 결과 정리", "일경험", "대기", -1, "높음"),
-    task(9, "일경험 프로젝트 중간 점검", "일경험", "대기", 4, "보통"),
-    task(10, "참여자 만족도 조사 리마인드", "일경험", "완료", 0, "낮음"),
-    task(11, "기업 멘토링 일정 확정", "일경험", "대기", 6, "보통"),
+    task(1, "수료식 준비", "취업운영", "대기", 0),
+    task(2, "수료보고 정리", "취업운영", "대기", -1, 1),
+    task(3, "동기야고마워 메일 발송 세팅", "취업운영", "대기", 1),
+    task(4, "취업운영 OT 진행", "취업운영", "완료", -1),
+    task(5, "헬스케어 취업운영 OT 모니터링", "취업운영", "완료", -2),
+    task(6, "수강생 상담일지 공유", "취업운영", "대기", -2),
+    task(7, "일경험 인수인계", "일경험", "대기", 0, 2),
+    task(8, "일경험 참여기업 매칭 결과 정리", "일경험", "대기", -1),
+    task(9, "일경험 프로젝트 중간 점검", "일경험", "대기", 4),
+    task(10, "참여자 만족도 조사 리마인드", "일경험", "완료", 0),
+    task(11, "기업 멘토링 일정 확정", "일경험", "대기", 6),
   ];
 
   const sch = (
     id: number,
     title: string,
     category: Schedule["category"],
-    dayOffset: number,
-    startTime: string,
-    endTime: string,
-    location: string,
-    description = "",
-    endDayOffset = dayOffset,
+    startOffset: number,
+    endOffset?: number,
   ): Schedule => ({
     id: `dev-schedule-${id}`,
     title,
     category,
-    start: `${d(dayOffset)} ${startTime}`,
-    end: `${d(endDayOffset)} ${endTime}`,
-    location,
-    description,
+    startDate: d(startOffset),
+    endDate: endOffset === undefined ? "" : d(endOffset),
   });
 
   const schedules: Schedule[] = [
-    sch(1, "주간 운영 미팅", "취업운영", 0, "10:00", "11:00", "회의실 A"),
-    sch(2, "수료식", "취업운영", 2, "14:00", "16:00", "대강당", "수료생 및 강사 참석"),
-    sch(3, "취업 특강: 이력서 작성법", "취업운영", 3, "19:00", "21:00", "온라인(ZEP)"),
-    sch(4, "일경험 참여기업 미팅", "일경험", 1, "15:00", "16:00", "기업 사무실"),
-    sch(5, "일경험 운영 교육", "일경험", 4, "09:30", "12:00", "교육장 2"),
-    sch(6, "일경험 네트워킹 행사", "일경험", 8, "18:00", "21:00", "라운지", "", 9),
+    sch(1, "주간 운영 미팅", "취업운영", 0),
+    sch(2, "수료식", "취업운영", 2),
+    sch(3, "취업 특강: 이력서 작성법", "취업운영", 3),
+    sch(4, "일경험 참여기업 미팅", "일경험", 1),
+    sch(5, "일경험 운영 교육", "일경험", 4),
+    sch(6, "일경험 네트워킹 행사", "일경험", 8, 9),
   ];
 
   const links: LinkItem[] = [

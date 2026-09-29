@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { addDays, datePart, shortDate, startOfWeek, timePart, todayStr, weekdayOf } from "@/lib/date";
+import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, TASK_STATUSES, slugOf, type LinkItem, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, TASK_STATUSES, rangeEnd, slugOf, type LinkItem, type Schedule, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
 import { CompleteCheckbox, DueBadge } from "./TaskItem";
-import { CATEGORY_STYLE, Card, CategoryBadge, Empty, ErrorNote, PageHeader, PriorityBadge, cn } from "./ui";
+import { CATEGORY_STYLE, Card, CategoryBadge, Empty, ErrorNote, PageHeader, cn } from "./ui";
 
-const byDue = (a: Task, b: Task) => a.dueDate.localeCompare(b.dueDate);
+// 마감 기준은 업무의 마지막 날(기간 업무는 종료일)
+const byDue = (a: Task, b: Task) => rangeEnd(a).localeCompare(rangeEnd(b));
 
 export function HomeView({
   initialTasks,
@@ -25,16 +26,18 @@ export function HomeView({
   const [editing, setEditing] = useState<Task | null>(null);
   const today = todayStr();
 
-  const dueToday = tasks.filter((t) => t.dueDate === today).sort((a, b) => Number(a.status === "완료") - Number(b.status === "완료"));
+  const dueToday = tasks
+    .filter((t) => rangeEnd(t) === today)
+    .sort((a, b) => Number(a.status === "완료") - Number(b.status === "완료"));
   const open = tasks.filter((t) => t.status !== "완료");
-  const overdue = open.filter((t) => t.dueDate && t.dueDate < today).sort(byDue);
-  const upcoming = open.filter((t) => !t.dueDate || t.dueDate > today).sort(byDue);
+  const overdue = open.filter((t) => t.startDate && rangeEnd(t) < today).sort(byDue);
+  const upcoming = open.filter((t) => !t.startDate || rangeEnd(t) > today).sort(byDue);
 
   const weekStart = startOfWeek(today);
   const weekEnd = addDays(weekStart, 6);
   const weekSchedules = schedules
-    .filter((s) => datePart(s.start) <= weekEnd && datePart(s.end) >= weekStart)
-    .sort((a, b) => a.start.localeCompare(b.start));
+    .filter((s) => s.startDate <= weekEnd && rangeEnd(s) >= weekStart)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   const favorites = links.filter((l) => l.favorite);
 
@@ -47,9 +50,8 @@ export function HomeView({
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1">
           <CategoryBadge c={t.category} />
-          <PriorityBadge p={t.priority} />
           <DueBadge task={t} />
-          <span className="text-xs text-slate-500">{t.dueDate ? shortDate(t.dueDate) : ""}</span>
+          <span className="text-xs text-slate-500">{rangeLabel(t)}</span>
         </span>
       </button>
     </li>
@@ -72,10 +74,9 @@ export function HomeView({
           className="lg:col-span-2"
           action={<Link href="/kanban" className="text-xs text-indigo-600 hover:underline">칸반보드</Link>}
         >
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="mb-3 grid grid-cols-2 gap-2">
             <Stat label="미완료" value={open.length} />
             <Stat label="지연" value={overdue.length} tone="danger" />
-            <Stat label="진행 중" value={tasks.filter((t) => t.status === "진행 중").length} className="hidden sm:block" />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -97,13 +98,12 @@ export function HomeView({
         <Card
           title={`이번 주 일정 (${shortDate(weekStart)} ~ ${shortDate(weekEnd)})`}
           className="lg:col-span-2"
-          action={<Link href="/calendar?view=schedule" className="text-xs text-indigo-600 hover:underline">캘린더</Link>}
+          action={<Link href="/kanban?view=schedule" className="text-xs text-indigo-600 hover:underline">캘린더</Link>}
         >
           {weekSchedules.length ? (
             <ul className="divide-y divide-slate-100">
               {weekSchedules.map((s) => {
-                const d = datePart(s.start);
-                const multi = datePart(s.end) !== d;
+                const d = s.startDate;
                 return (
                   <li key={s.id} className="flex items-start gap-3 py-2">
                     <div className={cn("w-14 shrink-0 text-center text-xs", d === today ? "font-bold text-indigo-600" : "text-slate-500")}>
@@ -114,9 +114,7 @@ export function HomeView({
                       <p className="text-sm font-medium break-words">{s.title}</p>
                       <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                         <CategoryBadge c={s.category} />
-                        {timePart(s.start)} ~ {multi ? `${shortDate(datePart(s.end))} ` : ""}
-                        {timePart(s.end)}
-                        {s.location && <span>· {s.location}</span>}
+                        {s.endDate && <span>{rangeLabel(s)}</span>}
                       </p>
                     </div>
                   </li>

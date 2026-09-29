@@ -80,12 +80,15 @@ export function monthGrid(year: number, month: number): string[] {
   return days;
 }
 
-export const datePart = (dt: string) => dt.slice(0, 10);
-export const timePart = (dt: string) => dt.slice(11, 16);
+/** "2026.09.28(월)" 형식 */
+export function fullDate(ymd: string): string {
+  return `${ymd.replaceAll("-", ".")}(${weekdayOf(ymd)})`;
+}
 
-/** HTML datetime-local 값("YYYY-MM-DDTHH:mm") <-> 저장 형식("YYYY-MM-DD HH:mm") */
-export const toInputDateTime = (dt: string) => dt.replace(" ", "T");
-export const fromInputDateTime = (v: string) => v.replace("T", " ").slice(0, 16);
+/** "9/28(월)" 또는 기간이면 "9/28(월) ~ 9/30(수)" */
+export function rangeLabel(r: { startDate: string; endDate: string }): string {
+  if (!r.startDate) return "날짜 없음";
+  return r.endDate ? `${shortDate(r.startDate)} ~ ${shortDate(r.endDate)}` : shortDate(r.startDate);
+}
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-export const DATETIME_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;

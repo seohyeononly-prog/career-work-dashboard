@@ -1,9 +1,9 @@
 import "server-only";
 import {
   CATEGORIES,
-  PRIORITIES,
   SERVICE_TYPES,
   TASK_STATUSES,
+  type DateRange,
   type LinkItem,
   type Schedule,
   type Task,
@@ -38,14 +38,19 @@ function normDateTime(v: string | undefined): string {
   return `${date} ${t ? `${pad(t[1])}:${t[2]}` : "00:00"}`;
 }
 
+/** 시작일·종료일 칸을 읽는다. 종료일이 비었거나 시작일 이전이면 하루짜리로 본다. */
+function readRange(start: string | undefined, end: string | undefined): DateRange {
+  const startDate = normDate(start);
+  const endDate = normDate(end);
+  return { startDate, endDate: endDate > startDate ? endDate : "" };
+}
+
 const truthy = (v: string | undefined) => /^(true|y|yes|1|o|예)$/i.test((v ?? "").trim());
 
 export const TasksTable: TableDef<Task> = {
   sheet: "Tasks",
-  headers: ["업무 ID", "업무명", "카테고리", "상태", "마감일", "중요도", "설명", "생성일", "수정일"],
-  toRow: (t) => [
-    t.id, t.title, t.category, t.status, t.dueDate, t.priority, t.description, t.createdAt, t.updatedAt,
-  ],
+  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일"],
+  toRow: (t) => [t.id, t.title, t.category, t.status, t.startDate, t.endDate, t.createdAt, t.updatedAt],
   fromRow: (r) =>
     r[0]?.trim()
       ? {
@@ -53,32 +58,26 @@ export const TasksTable: TableDef<Task> = {
           title: r[1] ?? "",
           category: oneOf(CATEGORIES, r[2], "취업운영"),
           status: oneOf(TASK_STATUSES, r[3], "대기"),
-          dueDate: normDate(r[4]),
-          priority: oneOf(PRIORITIES, r[5], "보통"),
-          description: r[6] ?? "",
-          createdAt: normDateTime(r[7]),
-          updatedAt: normDateTime(r[8]),
+          ...readRange(r[4], r[5]),
+          createdAt: normDateTime(r[6]),
+          updatedAt: normDateTime(r[7]),
         }
       : null,
 };
 
 export const SchedulesTable: TableDef<Schedule> = {
   sheet: "Schedules",
-  headers: ["일정 ID", "일정명", "카테고리", "시작일시", "종료일시", "장소", "설명"],
-  toRow: (s) => [s.id, s.title, s.category, s.start, s.end, s.location, s.description],
-  fromRow: (r) => {
-    if (!r[0]?.trim()) return null;
-    const start = normDateTime(r[3]);
-    return {
-      id: r[0].trim(),
-      title: r[1] ?? "",
-      category: oneOf(CATEGORIES, r[2], "취업운영"),
-      start,
-      end: normDateTime(r[4]) || start,
-      location: r[5] ?? "",
-      description: r[6] ?? "",
-    };
-  },
+  headers: ["일정 ID", "일정명", "카테고리", "시작일", "종료일"],
+  toRow: (s) => [s.id, s.title, s.category, s.startDate, s.endDate],
+  fromRow: (r) =>
+    r[0]?.trim()
+      ? {
+          id: r[0].trim(),
+          title: r[1] ?? "",
+          category: oneOf(CATEGORIES, r[2], "취업운영"),
+          ...readRange(r[3], r[4]),
+        }
+      : null,
 };
 
 export const LinksTable: TableDef<LinkItem> = {

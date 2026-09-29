@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import type { Category, Priority, TaskStatus } from "@/lib/types";
+import type { Category } from "@/lib/types";
 
 export function cn(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -10,18 +10,6 @@ export function cn(...c: (string | false | null | undefined)[]) {
 export const CATEGORY_STYLE: Record<Category, { dot: string; badge: string; bar: string }> = {
   취업운영: { dot: "bg-indigo-500", badge: "bg-indigo-50 text-indigo-700", bar: "bg-indigo-500" },
   일경험: { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700", bar: "bg-emerald-500" },
-};
-
-const PRIORITY_STYLE: Record<Priority, string> = {
-  높음: "bg-rose-50 text-rose-700",
-  보통: "bg-amber-50 text-amber-700",
-  낮음: "bg-slate-100 text-slate-600",
-};
-
-const STATUS_STYLE: Record<TaskStatus, string> = {
-  대기: "bg-slate-100 text-slate-600",
-  "진행 중": "bg-sky-50 text-sky-700",
-  완료: "bg-green-50 text-green-700",
 };
 
 export function Badge({ className, children }: { className?: string; children: ReactNode }) {
@@ -34,12 +22,6 @@ export function Badge({ className, children }: { className?: string; children: R
 
 export const CategoryBadge = ({ c }: { c: Category }) => (
   <Badge className={CATEGORY_STYLE[c].badge}>{c}</Badge>
-);
-export const PriorityBadge = ({ p }: { p: Priority }) => (
-  <Badge className={PRIORITY_STYLE[p]}>{p}</Badge>
-);
-export const StatusBadge = ({ s }: { s: TaskStatus }) => (
-  <Badge className={STATUS_STYLE[s]}>{s}</Badge>
 );
 
 export function Button({
