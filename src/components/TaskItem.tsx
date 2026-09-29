@@ -4,14 +4,11 @@ import { diffDays, rangeLabel, todayStr } from "@/lib/date";
 import { rangeEnd, type Task } from "@/lib/types";
 import { Badge, CategoryBadge, cn } from "./ui";
 
-/** 미완료 업무의 지연·오늘 마감·임박 표시 (기간 업무는 종료일 기준) */
+/** 미완료 업무의 지연 표시 (기간 업무는 종료일 기준). 대부분 당일 업무라 오늘 마감·임박은 표시하지 않는다 */
 export function DueBadge({ task }: { task: Task }) {
   if (task.status === "완료" || !task.startDate) return null;
   const d = diffDays(todayStr(), rangeEnd(task));
-  if (d < 0) return <Badge className="bg-rose-100 text-rose-700">지연 {-d}일</Badge>;
-  if (d === 0) return <Badge className="bg-orange-100 text-orange-700">오늘 마감</Badge>;
-  if (d <= 2) return <Badge className="bg-amber-100 text-amber-700">임박</Badge>;
-  return null;
+  return d < 0 ? <Badge className="bg-rose-100 text-rose-700">지연 {-d}일</Badge> : null;
 }
 
 export function CompleteCheckbox({
