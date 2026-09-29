@@ -8,6 +8,7 @@ import { CATEGORIES, TASK_STATUSES, byOrder, covers, type Category, type Schedul
 import { CalendarPanel, type CalendarMode } from "./CalendarPanel";
 import { ScheduleFormModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
+import { useToast } from "./Toast";
 import { Button, Empty, ErrorNote, Select, cn, inputCls } from "./ui";
 
 type All = "전체";
@@ -83,7 +84,7 @@ export function WorkView({
   const [category, setCategory] = useState<Category | All>("전체");
   const [status, setStatus] = useState<TaskStatus | All>("전체");
   const [modal, setModal] = useState<Modal>(null);
-  const [copied, setCopied] = useState<{ kind: CopyKind; msg: string } | null>(null);
+  const toast = useToast();
   const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
 
   // WBS 셀 위치는 이 브라우저에 기억해 둔다 (입력 전에는 저장된 값을 보여 줌)
@@ -136,21 +137,19 @@ export function WorkView({
   /** 선택한 날짜의 업무 전체를 칸반 순서대로 한 줄씩 복사한다 */
   const copyTasks = async (kind: CopyKind) => {
     const lines = allDayTasks.map(COPY_FORMATS[kind].line);
-    let msg: string;
-    if (!lines.length) msg = "복사할 업무가 없습니다";
+    const name = COPY_FORMATS[kind].label.replace(" 복사", "");
+    if (!lines.length) toast("이 날짜에 복사할 업무가 없어요", "error");
     else {
       try {
         await copyText(lines.join("\n"));
-        msg = `${lines.length}건 복사됨`;
+        toast(`${name} ${lines.length}건을 복사했어요`);
       } catch {
-        msg = "복사 실패";
+        toast("복사하지 못했어요. 다시 시도해 주세요", "error");
       }
     }
     // 새 탭을 먼저 열면 문서 포커스를 잃어 클립보드 쓰기가 실패하므로 복사 후에 연다
     if (kind === "wbs")
       window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
-    setCopied({ kind, msg });
-    setTimeout(() => setCopied(null), 2000);
   };
 
   return (
@@ -205,8 +204,8 @@ export function WorkView({
         </div>
         <div className="mb-3 grid grid-cols-[1fr_1fr_4.5rem] gap-1.5">
           {(Object.keys(COPY_FORMATS) as CopyKind[]).map((k) => (
-            <Button key={k} onClick={() => copyTasks(k)} aria-live="polite">
-              {copied?.kind === k ? copied.msg : COPY_FORMATS[k].label}
+            <Button key={k} onClick={() => copyTasks(k)}>
+              {COPY_FORMATS[k].label}
             </Button>
           ))}
           <input
