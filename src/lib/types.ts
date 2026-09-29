@@ -28,7 +28,7 @@ export interface Task extends DateRange {
   title: string;
   category: Category;
   status: TaskStatus;
-  /** 칸반에서 드래그로 정한 순서. 0이면 아직 정하지 않은 것(맨 뒤) */
+  /** 칸반 순서(작을수록 위). 새 업무는 음수로 맨 위, 0이면 아직 정하지 않은 것(맨 뒤) */
   order: number;
   createdAt: string; // YYYY-MM-DD HH:mm
   updatedAt: string; // YYYY-MM-DD HH:mm

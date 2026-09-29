@@ -101,7 +101,9 @@ export const listTasks = () => tasksRepo.list();
 export async function createTask(input: unknown): Promise<Task> {
   const data = parse(taskInputSchema, input);
   const now = nowStr();
-  return tasksRepo.insert({ id: newId("T"), ...data, order: 0, createdAt: now, updatedAt: now });
+  // 새 업무는 칸반 맨 위: 지금 가장 작은 순서보다 1 작게 (0은 '순서 없음'이라 항상 -1 이하)
+  const order = Math.min(0, ...(await tasksRepo.list()).map((t) => t.order)) - 1;
+  return tasksRepo.insert({ id: newId("T"), ...data, order, createdAt: now, updatedAt: now });
 }
 
 /** 칸반 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 수정일은 바꾸지 않는다. */

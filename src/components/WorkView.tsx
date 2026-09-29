@@ -54,9 +54,12 @@ function readWbsCell() {
   return WBS_DEFAULT_CELL;
 }
 
-/** 복사 버튼 형식: 마감보고는 본부명을 앞에 붙인다 */
+/** 복사 버튼 형식: 마감보고는 본부명을 앞에 붙이고, 기타 카테고리는 카테고리명을 뺀다 */
 const COPY_FORMATS = {
-  report: { label: "마감보고 복사", line: (t: Task) => `[교육사업본부] ${t.category} ${t.title}` },
+  report: {
+    label: "마감보고 복사",
+    line: (t: Task) => `[교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`,
+  },
   wbs: { label: "WBS 복사", line: (t: Task) => `${t.category} ${t.title}` },
 } as const;
 type CopyKind = keyof typeof COPY_FORMATS;
