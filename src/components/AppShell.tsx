@@ -57,19 +57,49 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SourceBadge({ source }: { source: DataSource }) {
-  return source === "sheets" ? (
-    <p className="mx-3 mb-4 rounded-md bg-green-50 px-2.5 py-2 text-xs text-green-700">
-      ● 저장소: Google Sheets
-    </p>
-  ) : (
-    <p className="mx-3 mb-4 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
-      ● 저장소: 개발용 예시 데이터
-    </p>
+const FLEX_URL = "https://flex.team/home";
+
+/** 사이드바 아래: flex 바로가기 + 저장소(연결된 시트 열기) */
+function SidebarFooter({ source, sheetUrl }: { source: DataSource; sheetUrl: string | null }) {
+  return (
+    <div className="mx-3 mb-4 space-y-1.5">
+      <a
+        href={FLEX_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between rounded-md border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        flex 열기
+        <span aria-hidden>↗</span>
+      </a>
+      {source === "sheets" && sheetUrl ? (
+        <a
+          href={sheetUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="데이터가 저장되는 Google 시트 열기"
+          className="flex items-center justify-between rounded-md bg-green-50 px-2.5 py-2 text-xs text-green-700 hover:bg-green-100"
+        >
+          ● 저장소: Google Sheets
+          <span aria-hidden>↗</span>
+        </a>
+      ) : (
+        <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">● 저장소: 개발용 예시 데이터</p>
+      )}
+    </div>
   );
 }
 
-export function AppShell({ source, children }: { source: DataSource; children: ReactNode }) {
+export function AppShell({
+  source,
+  sheetUrl,
+  children,
+}: {
+  source: DataSource;
+  /** 저장소 시트 주소 (Sheets 연결 시) */
+  sheetUrl: string | null;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -80,7 +110,7 @@ export function AppShell({ source, children }: { source: DataSource; children: R
           <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
           <Nav />
         </div>
-        <SourceBadge source={source} />
+        <SidebarFooter source={source} sheetUrl={sheetUrl} />
       </aside>
 
       {/* 모바일 메뉴 */}
@@ -92,7 +122,7 @@ export function AppShell({ source, children }: { source: DataSource; children: R
               <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
               <Nav onNavigate={() => setOpen(false)} />
             </div>
-            <SourceBadge source={source} />
+            <SidebarFooter source={source} sheetUrl={sheetUrl} />
           </aside>
         </div>
       )}

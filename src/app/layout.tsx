@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppShell } from "@/components/AppShell";
-import { getDataSource } from "@/lib/server/repository";
+import { getDataSource, getSheetUrl } from "@/lib/server/repository";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +17,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full">
-        <AppShell source={getDataSource()}>{children}</AppShell>
+        <AppShell source={getDataSource()} sheetUrl={getSheetUrl()}>{children}</AppShell>
       </body>
     </html>
   );

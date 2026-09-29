@@ -16,6 +16,12 @@ export function getDataSource(): DataSource {
   return isSheetsConfigured() ? "sheets" : "dev";
 }
 
+/** 저장소로 쓰는 스프레드시트 주소. 사이드바에서 시트를 바로 열 때 쓴다. */
+export function getSheetUrl(): string | null {
+  const id = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  return getDataSource() === "sheets" && id ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit` : null;
+}
+
 export class ValidationError extends Error {}
 export class NotFoundError extends Error {}
 
