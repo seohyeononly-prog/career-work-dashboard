@@ -26,6 +26,7 @@ export const api = {
   createLink: (v: LinkInput) => request<LinkItem>("/api/links", "POST", v),
   updateLink: (id: string, v: Partial<LinkInput>) =>
     request<LinkItem>(`/api/links/${encodeURIComponent(id)}`, "PATCH", v),
+  deleteLink: (id: string) => request<{ ok: true }>(`/api/links/${encodeURIComponent(id)}`, "DELETE"),
 };
 
 /** 목록에서 같은 ID 항목을 교체하거나 새로 추가 */

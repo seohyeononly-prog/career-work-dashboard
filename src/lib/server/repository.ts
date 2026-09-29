@@ -178,3 +178,8 @@ export async function updateLink(id: string, patch: unknown): Promise<LinkItem> 
   const data = parse(linkInputSchema, { ...current, ...(patch as object) });
   return linksRepo.replace({ ...data, id });
 }
+
+export async function deleteLink(id: string): Promise<{ ok: true }> {
+  await linksRepo.remove(id);
+  return { ok: true };
+}

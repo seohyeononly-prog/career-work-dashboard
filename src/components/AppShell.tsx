@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { DataSource } from "@/lib/types";
+import { ToastProvider } from "./Toast";
 import { cn } from "./ui";
 
 const NAV = [
@@ -118,7 +119,9 @@ export function AppShell({ source, children }: { source: DataSource; children: R
           </div>
         )}
 
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          <ToastProvider>{children}</ToastProvider>
+        </main>
       </div>
     </div>
   );

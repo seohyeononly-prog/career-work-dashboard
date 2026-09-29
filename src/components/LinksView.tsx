@@ -96,6 +96,10 @@ export function LinksView({ category, initialLinks }: { category: LinkCategory; 
             apply(l);
             setModal(null);
           }}
+          onDeleted={(id) => {
+            setLinks((list) => list.filter((x) => x.id !== id));
+            setModal(null);
+          }}
         />
       )}
     </div>

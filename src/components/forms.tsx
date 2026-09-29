@@ -15,6 +15,7 @@ import {
   type Schedule,
   type Task,
 } from "@/lib/types";
+import { useToast } from "./Toast";
 import { Button, ErrorNote, Field, Modal, Select, inputCls } from "./ui";
 
 function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
@@ -35,28 +36,67 @@ function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
   return { saving, error, submit };
 }
 
-function Footer({
-  saving,
-  onClose,
-  onDelete,
-  deleting,
-}: {
-  saving: boolean;
-  onClose: () => void;
-  onDelete?: () => void;
-  deleting?: boolean;
-}) {
+/**
+ * 삭제 흐름: 삭제 → 창 안에서 한 번 더 확인 → 삭제 후 토스트.
+ * remove가 없으면(새로 만들 때) 삭제 버튼을 보이지 않는다.
+ */
+function useDelete(what: string, remove?: () => Promise<void>) {
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  if (!remove) return { error: "", del: undefined };
+
+  const confirm = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await remove();
+      toast(`${what} 삭제했어요`);
+    } catch (err) {
+      setError((err as Error).message);
+      setDeleting(false);
+      setConfirming(false);
+    }
+  };
+  return {
+    error,
+    del: { confirming, deleting, ask: () => setConfirming(true), cancel: () => setConfirming(false), confirm },
+  };
+}
+type DeleteControl = ReturnType<typeof useDelete>["del"];
+
+function Footer({ saving, onClose, del }: { saving: boolean; onClose: () => void; del?: DeleteControl }) {
+  if (del?.confirming)
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 ring-1 ring-rose-100">
+        <p className="mr-auto text-sm text-rose-700">삭제하면 되돌릴 수 없어요.</p>
+        <Button type="button" onClick={del.cancel} disabled={del.deleting}>
+          취소
+        </Button>
+        <Button
+          type="button"
+          className="border-rose-600! bg-rose-600! text-white! hover:bg-rose-700!"
+          onClick={del.confirm}
+          disabled={del.deleting}
+          autoFocus
+        >
+          {del.deleting ? "삭제 중…" : "삭제하기"}
+        </Button>
+      </div>
+    );
+
   return (
     <div className="flex justify-end gap-2 pt-2">
-      {onDelete && (
+      {del && (
         <Button
           type="button"
           variant="ghost"
           className="mr-auto text-rose-600! hover:bg-rose-50!"
-          onClick={onDelete}
-          disabled={saving || deleting}
+          onClick={del.ask}
+          disabled={saving}
         >
-          {deleting ? "삭제 중…" : "삭제"}
+          삭제
         </Button>
       )}
       <Button type="button" onClick={onClose}>
@@ -143,21 +183,11 @@ function ItemForm<T>({
   const [v, setV] = useState<Draft>(initial);
   const set = (p: Partial<Draft>) => setV((s) => ({ ...s, ...p }));
   const { saving, error: saveError, submit } = useSubmit(() => save(v), onSaved);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
+  const { error: deleteError, del } = useDelete(
+    `'${initial.title}' ${kind}${kind === "업무" ? "를" : "을"}`,
+    remove,
+  );
   const error = saveError || deleteError;
-
-  const onDelete = async () => {
-    if (!remove || !window.confirm(`"${initial.title}" ${kind}${kind === "업무" ? "를" : "을"} 삭제할까요? 되돌릴 수 없습니다.`)) return;
-    setDeleting(true);
-    setDeleteError("");
-    try {
-      await remove();
-    } catch (err) {
-      setDeleteError((err as Error).message);
-      setDeleting(false);
-    }
-  };
 
   return (
     <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
@@ -170,7 +200,7 @@ function ItemForm<T>({
         </Field>
         <DateRangeFields value={v} onChange={set} />
         {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} onDelete={remove && onDelete} deleting={deleting} />
+        <Footer saving={saving} onClose={onClose} del={del} />
       </form>
     </Modal>
   );
@@ -257,11 +287,13 @@ export function LinkFormModal({
   category,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   link?: LinkItem;
   category: LinkCategory;
   onClose: () => void;
   onSaved: (l: LinkItem) => void;
+  onDeleted?: (id: string) => void;
 }) {
   const [v, setV] = useState<LinkInput>({
     name: link?.name ?? "",
@@ -272,10 +304,20 @@ export function LinkFormModal({
     favorite: link?.favorite ?? false,
   });
   const set = (p: Partial<LinkInput>) => setV((s) => ({ ...s, ...p }));
-  const { saving, error, submit } = useSubmit(
+  const { saving, error: saveError, submit } = useSubmit(
     () => (link ? api.updateLink(link.id, v) : api.createLink(v)),
     onSaved,
   );
+  const { error: deleteError, del } = useDelete(
+    `'${link?.name}' 링크를`,
+    link && onDeleted
+      ? async () => {
+          await api.deleteLink(link.id);
+          onDeleted(link.id);
+        }
+      : undefined,
+  );
+  const error = saveError || deleteError;
 
   return (
     <Modal title={link ? "링크 수정" : "새 링크"} onClose={onClose}>
@@ -309,7 +351,7 @@ export function LinkFormModal({
           즐겨찾기
         </label>
         {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} />
+        <Footer saving={saving} onClose={onClose} del={del} />
       </form>
     </Modal>
   );
