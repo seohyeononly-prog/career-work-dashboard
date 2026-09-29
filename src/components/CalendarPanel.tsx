@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { WEEKDAYS, monthGrid, shortDate, todayStr } from "@/lib/date";
 import { CATEGORIES, covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
 import { Button, CATEGORY_STYLE, cn } from "./ui";
@@ -40,6 +41,8 @@ export function CalendarPanel({
   onAdd: () => void;
 }) {
   const today = todayStr();
+  /** '더보기'로 모든 항목을 펼친 날짜 */
+  const [expanded, setExpanded] = useState<string | null>(null);
   const days = monthGrid(year, month);
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -111,6 +114,8 @@ export function CalendarPanel({
           {days.map((d, i) => {
             const inMonth = d.startsWith(monthPrefix);
             const items = mode === "task" ? tasksOn(d) : schedulesOn(d);
+            const open = expanded === d;
+            const shown = open ? items.length : MAX_IN_CELL;
             return (
               <div
                 key={d}
@@ -155,7 +160,7 @@ export function CalendarPanel({
                 {/* 넓은 화면: 항목 제목 표시 */}
                 <ul className="mt-1 hidden space-y-0.5 sm:block">
                   {mode === "task"
-                    ? (items as Task[]).slice(0, MAX_IN_CELL).map((t) => (
+                    ? (items as Task[]).slice(0, shown).map((t) => (
                         <li key={t.id}>
                           <button
                             onClick={(e) => {
@@ -182,7 +187,7 @@ export function CalendarPanel({
                           </button>
                         </li>
                       ))
-                    : (items as Schedule[]).slice(0, MAX_IN_CELL).map((s) => (
+                    : (items as Schedule[]).slice(0, shown).map((s) => (
                         <li key={s.id}>
                           <button
                             onClick={(e) => {
@@ -199,7 +204,16 @@ export function CalendarPanel({
                         </li>
                       ))}
                   {items.length > MAX_IN_CELL && (
-                    <li className="px-1 text-[11px] text-slate-400">+{items.length - MAX_IN_CELL}개 더보기</li>
+                    <li>
+                      {/* 날짜 선택도 같이 되도록 클릭은 칸까지 전달한다 */}
+                      <button
+                        onClick={() => setExpanded(open ? null : d)}
+                        aria-expanded={open}
+                        className="w-full rounded px-1 py-0.5 text-left text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        {open ? "접기" : `+${items.length - MAX_IN_CELL}개 더보기`}
+                      </button>
+                    </li>
                   )}
                 </ul>
               </div>
