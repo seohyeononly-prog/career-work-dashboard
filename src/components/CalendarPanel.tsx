@@ -19,6 +19,28 @@ const MODES = [
   ["company", "기업별 일정"],
 ] as const;
 
+/** 탭마다 캘린더 색을 조금씩 다르게: 활성 탭, 추가 버튼, 캘린더 윗선, 요일 줄 */
+const MODE_STYLE: Record<CalendarMode, { tab: string; add: string; frame: string; head: string }> = {
+  task: {
+    tab: "bg-indigo-600 text-white",
+    add: "",
+    frame: "border-t-indigo-500",
+    head: "bg-indigo-50/70 text-indigo-900/70",
+  },
+  schedule: {
+    tab: "bg-sky-600 text-white",
+    add: "bg-sky-600! hover:bg-sky-700!",
+    frame: "border-t-sky-500",
+    head: "bg-sky-50 text-sky-900/70",
+  },
+  company: {
+    tab: "bg-violet-600 text-white",
+    add: "bg-violet-600! hover:bg-violet-700!",
+    frame: "border-t-violet-500",
+    head: "bg-violet-50 text-violet-900/70",
+  },
+};
+
 type DragItem = { kind: "task"; item: Task; from: string } | { kind: "schedule"; item: Schedule; from: string };
 
 /** 기업별 보기에서 보여 줄 일정인지 */
@@ -129,6 +151,12 @@ export function CalendarPanel({
     <section aria-label="캘린더" className="min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-semibold">캘린더</h2>
+        {/* 업무 추가는 왼쪽 칸반보드의 버튼을 쓴다 */}
+        {mode !== "task" && (
+          <Button variant="primary" className={MODE_STYLE[mode].add} onClick={() => onAdd(selected)}>
+            + 새 일정
+          </Button>
+        )}
         <div role="tablist" aria-label="캘린더 보기" className="flex rounded-md border border-slate-200 bg-white p-0.5">
           {MODES.map(([k, label]) => (
             <button
@@ -138,19 +166,13 @@ export function CalendarPanel({
               onClick={() => onModeChange(k)}
               className={cn(
                 "rounded px-3 py-1 text-sm",
-                mode === k ? "bg-indigo-600 font-medium text-white" : "text-slate-600 hover:bg-slate-100",
+                mode === k ? cn("font-medium", MODE_STYLE[k].tab) : "text-slate-600 hover:bg-slate-100",
               )}
             >
               {label}
             </button>
           ))}
         </div>
-        {/* 업무 추가는 왼쪽 칸반보드의 버튼을 쓴다 */}
-        {mode !== "task" && (
-          <Button variant="primary" onClick={() => onAdd(selected)}>
-            + 새 일정
-          </Button>
-        )}
       </div>
 
       {mode === "company" && (
@@ -189,8 +211,8 @@ export function CalendarPanel({
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className={cn(gridCls, "border-b border-slate-200 bg-slate-50 text-center text-xs text-slate-500")}>
+      <div className={cn("overflow-hidden rounded-lg border border-t-4 border-slate-200 bg-white", MODE_STYLE[mode].frame)}>
+        <div className={cn(gridCls, "border-b border-slate-200 text-center text-xs", MODE_STYLE[mode].head)}>
           {WEEKDAYS.map((w, i) =>
             weekdaysOnly && (i === 0 || i === 6) ? null : (
               <div key={w} className={cn("py-1.5", i === 0 && "text-rose-500", i === 6 && "text-blue-500")}>
