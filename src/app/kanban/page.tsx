@@ -15,7 +15,7 @@ export default async function KanbanPage(props: PageProps<"/kanban">) {
     <WorkView
       initialTasks={tasks}
       initialSchedules={schedules}
-      initialMode={view === "schedule" ? "schedule" : "task"}
+      initialMode={view === "schedule" || view === "company" ? view : "task"}
     />
   );
 }

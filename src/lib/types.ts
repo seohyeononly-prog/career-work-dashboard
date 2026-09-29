@@ -73,3 +73,6 @@ export const byOrder = (a: Task, b: Task) =>
 /** 링크 표시 순서: 드래그로 정한 순서 → 링크명 */
 export const byLinkOrder = (a: LinkItem, b: LinkItem) =>
   (a.order || Infinity) - (b.order || Infinity) || a.name.localeCompare(b.name, "ko");
+
+/** 일정 제목 맨 앞의 '[기업]'에서 기업명을 꺼낸다. 없으면 "" */
+export const companyOf = (title: string) => title.match(/^\s*\[([^\]]+)\]/)?.[1].trim() ?? "";

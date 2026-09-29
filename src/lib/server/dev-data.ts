@@ -66,6 +66,10 @@ export function createDevData(): { tasks: Task[]; schedules: Schedule[]; links: 
     sch(4, "일경험 참여기업 미팅", "일경험", 1),
     sch(5, "일경험 운영 교육", "일경험", 4),
     sch(6, "일경험 네트워킹 행사", "일경험", 8, 9),
+    sch(7, "[한빛소프트] 킥오프 미팅", "일경험", 0),
+    sch(8, "[한빛소프트] 중간 발표", "일경험", 5),
+    sch(9, "[그린랩스] 현장 방문", "일경험", 1),
+    sch(10, "[그린랩스] 멘토링", "일경험", 3, 4),
   ];
 
   const links: LinkItem[] = [

@@ -206,10 +206,18 @@ function ItemForm<T>({
   );
 }
 
-const draftOf = (item: Draft | undefined, defaults: { category?: Category; date?: string }): Draft =>
+const draftOf = (
+  item: Draft | undefined,
+  defaults: { title?: string; category?: Category; date?: string },
+): Draft =>
   item
     ? { title: item.title, category: item.category, startDate: item.startDate, endDate: item.endDate }
-    : { title: "", category: defaults.category ?? "취업운영", startDate: defaults.date ?? todayStr(), endDate: "" };
+    : {
+        title: defaults.title ?? "",
+        category: defaults.category ?? "취업운영",
+        startDate: defaults.date ?? todayStr(),
+        endDate: "",
+      };
 
 // ---------- 업무 ----------
 export function TaskFormModal({
@@ -251,12 +259,17 @@ export function TaskFormModal({
 export function ScheduleFormModal({
   schedule,
   defaultDate,
+  defaultTitle,
+  defaultCategory,
   onClose,
   onSaved,
   onDeleted,
 }: {
   schedule?: Schedule;
   defaultDate?: string;
+  /** 기업별 보기에서 추가할 때 '[기업] '을 미리 채운다 */
+  defaultTitle?: string;
+  defaultCategory?: Category;
   onClose: () => void;
   onSaved: (s: Schedule) => void;
   onDeleted?: (id: string) => void;
@@ -265,7 +278,7 @@ export function ScheduleFormModal({
     <ItemForm
       kind="일정"
       isEdit={!!schedule}
-      initial={draftOf(schedule, { date: defaultDate })}
+      initial={draftOf(schedule, { title: defaultTitle, category: defaultCategory, date: defaultDate })}
       save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
       onClose={onClose}
       onSaved={onSaved}

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { upsert } from "@/lib/client-api";
-import { addDays, fullDate, todayStr } from "@/lib/date";
+import { api, upsert } from "@/lib/client-api";
+import { addDays, fullDate, shortDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { CATEGORIES, TASK_STATUSES, byOrder, covers, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
-import { CalendarPanel, type CalendarMode } from "./CalendarPanel";
+import { ALL_COMPANIES, CalendarPanel, type CalendarMode } from "./CalendarPanel";
 import { ScheduleFormModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
 import { useToast } from "./Toast";
@@ -15,7 +15,7 @@ type All = "전체";
 
 type Modal =
   | { kind: "task"; task?: Task; date?: string }
-  | { kind: "schedule"; schedule?: Schedule; date?: string }
+  | { kind: "schedule"; schedule?: Schedule; date?: string; title?: string; category?: Category }
   | null;
 
 const COLUMN_STYLE: Record<TaskStatus, string> = {
@@ -86,6 +86,8 @@ export function WorkView({
   const [modal, setModal] = useState<Modal>(null);
   const toast = useToast();
   const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
+  /** 기업별 일정 보기에서 고른 기업 ("" = 기업 전체) */
+  const [company, setCompany] = useState(ALL_COMPANIES);
 
   // WBS 셀 위치는 이 브라우저에 기억해 둔다 (입력 전에는 저장된 값을 보여 줌)
   const savedWbsCell = useSyncExternalStore(noSubscribe, readWbsCell, () => WBS_DEFAULT_CELL);
@@ -116,6 +118,44 @@ export function WorkView({
     url.searchParams.set("view", m);
     window.history.replaceState(null, "", url);
   };
+
+  /** 캘린더에서 끌어 옮긴 업무·일정: 기간 전체를 n일 민다. 먼저 화면에 반영하고 실패하면 되돌린다. */
+  const shifted = <T extends Task | Schedule>(r: T, n: number): T => ({
+    ...r,
+    startDate: addDays(r.startDate, n),
+    endDate: r.endDate ? addDays(r.endDate, n) : "",
+  });
+  const moveTask = async (t: Task, n: number) => {
+    const next = shifted(t, n);
+    save(next);
+    try {
+      save(await api.updateTask(t.id, { startDate: next.startDate, endDate: next.endDate }));
+      toast(`'${t.title}' 날짜를 ${shortDate(next.startDate)}로 바꿨어요`);
+    } catch (e) {
+      save(t);
+      toast((e as Error).message, "error");
+    }
+  };
+  const moveSchedule = async (s: Schedule, n: number) => {
+    const next = shifted(s, n);
+    setSchedules((l) => upsert(l, next));
+    try {
+      const saved = await api.updateSchedule(s.id, { startDate: next.startDate, endDate: next.endDate });
+      setSchedules((l) => upsert(l, saved));
+      toast(`'${s.title}' 날짜를 ${shortDate(next.startDate)}로 바꿨어요`);
+    } catch (e) {
+      setSchedules((l) => upsert(l, s));
+      toast((e as Error).message, "error");
+    }
+  };
+
+  /** 일정 추가: 기업별 보기에서는 일경험 + '[기업] '을 미리 채운다 */
+  const addSchedule = (d: string) =>
+    setModal(
+      mode === "company"
+        ? { kind: "schedule", date: d, category: "일경험", title: company ? `[${company}] ` : "" }
+        : { kind: "schedule", date: d },
+    );
 
   /** 선택한 날짜의 업무 전체(필터 무관). 드래그 순서와 복사 순서의 기준 */
   const allDayTasks = tasks.filter((t) => covers(t, date)).sort(byOrder);
@@ -292,6 +332,8 @@ export function WorkView({
         schedules={schedules}
         mode={mode}
         onModeChange={setMode}
+        company={company}
+        onCompanyChange={setCompany}
         year={ym.y}
         month={ym.m}
         onMove={moveMonth}
@@ -300,7 +342,10 @@ export function WorkView({
         onSelect={selectDate}
         onOpenTask={(task) => setModal({ kind: "task", task })}
         onOpenSchedule={(schedule) => setModal({ kind: "schedule", schedule })}
-        onAdd={() => setModal({ kind: "schedule", date })}
+        onAdd={addSchedule}
+        onAddTask={(d) => setModal({ kind: "task", date: d })}
+        onMoveTask={moveTask}
+        onMoveSchedule={moveSchedule}
       />
 
       {modal?.kind === "task" && (
@@ -323,6 +368,8 @@ export function WorkView({
         <ScheduleFormModal
           schedule={modal.schedule}
           defaultDate={modal.date}
+          defaultTitle={modal.title}
+          defaultCategory={modal.category}
           onClose={() => setModal(null)}
           onSaved={(s) => {
             setSchedules((l) => upsert(l, s));

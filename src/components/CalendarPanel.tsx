@@ -1,13 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { WEEKDAYS, monthGrid, shortDate, todayStr } from "@/lib/date";
-import { CATEGORIES, covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
-import { Button, CATEGORY_STYLE, cn } from "./ui";
+import { WEEKDAYS, diffDays, monthGrid, rangeLabel, shortDate, toUTCDate, todayStr } from "@/lib/date";
+import { CATEGORIES, companyOf, covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
+import { Button, CATEGORY_STYLE, CategoryBadge, Empty, Select, cn } from "./ui";
 
-export type CalendarMode = "task" | "schedule";
+/** 업무 확인 / 일정 확인 / 기업별 일정(일경험 일정 중 '[기업]'으로 시작하는 것) */
+export type CalendarMode = "task" | "schedule" | "company";
+
+/** 기업 선택값: 기업명, 또는 기업이 붙은 일경험 일정 전체 */
+export const ALL_COMPANIES = "";
 
 const MAX_IN_CELL = 3;
+
+const MODES = [
+  ["task", "업무 확인"],
+  ["schedule", "일정 확인"],
+  ["company", "기업별 일정"],
+] as const;
+
+type DragItem = { kind: "task"; item: Task; from: string } | { kind: "schedule"; item: Schedule; from: string };
+
+/** 기업별 보기에서 보여 줄 일정인지 */
+export const matchesCompany = (s: Schedule, company: string) =>
+  s.category === "일경험" && companyOf(s.title) !== "" && (company === ALL_COMPANIES || companyOf(s.title) === company);
 
 /** 월 캘린더. 날짜 선택·월 이동 상태는 부모(WorkView)가 가진다. */
 export function CalendarPanel({
@@ -15,6 +31,8 @@ export function CalendarPanel({
   schedules,
   mode,
   onModeChange,
+  company,
+  onCompanyChange,
   year,
   month,
   onMove,
@@ -24,11 +42,16 @@ export function CalendarPanel({
   onOpenTask,
   onOpenSchedule,
   onAdd,
+  onAddTask,
+  onMoveTask,
+  onMoveSchedule,
 }: {
   tasks: Task[];
   schedules: Schedule[];
   mode: CalendarMode;
   onModeChange: (m: CalendarMode) => void;
+  company: string;
+  onCompanyChange: (c: string) => void;
   year: number;
   month: number;
   onMove: (delta: number) => void;
@@ -37,31 +60,77 @@ export function CalendarPanel({
   onSelect: (day: string) => void;
   onOpenTask: (t: Task) => void;
   onOpenSchedule: (s: Schedule) => void;
-  /** 일정 추가 */
-  onAdd: () => void;
+  /** 해당 날짜로 일정 추가 */
+  onAdd: (date: string) => void;
+  /** 해당 날짜로 업무 추가 */
+  onAddTask: (date: string) => void;
+  /** 드래그로 날짜 옮기기: 기간 전체를 days만큼 민다 */
+  onMoveTask: (t: Task, days: number) => void;
+  onMoveSchedule: (s: Schedule, days: number) => void;
 }) {
   const today = todayStr();
   /** '더보기'로 모든 항목을 펼친 날짜 */
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [drag, setDrag] = useState<DragItem | null>(null);
+  const [overDay, setOverDay] = useState<string | null>(null);
   const days = monthGrid(year, month);
+  // 일정 캘린더(일정 확인·기업별)는 평일만, 업무 확인은 주말까지 보여 준다
+  const weekdaysOnly = mode !== "task";
+  const cols = weekdaysOnly ? 5 : 7;
+  const gridCls = weekdaysOnly ? "grid grid-cols-5" : "grid grid-cols-7";
+  const cells = weekdaysOnly ? days.filter((d) => ![0, 6].includes(toUTCDate(d).getUTCDay())) : days;
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
 
+  // 기업 목록: 일경험 일정 제목의 '[기업]'. 고른 기업의 일정을 다 지워도 선택은 유지되게 넣어 둔다.
+  const companies = [
+    ...new Set([
+      ...schedules.filter((s) => s.category === "일경험").map((s) => companyOf(s.title)),
+      company,
+    ]),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ko"));
+
+  const visibleSchedules = mode === "company" ? schedules.filter((s) => matchesCompany(s, company)) : schedules;
   const tasksOn = (d: string) =>
     tasks.filter((t) => covers(t, d)).sort((a, b) => Number(a.status === "완료") - Number(b.status === "완료"));
   const schedulesOn = (d: string) =>
-    schedules.filter((s) => covers(s, d)).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    visibleSchedules.filter((s) => covers(s, d)).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  /** 기업을 하나 골랐으면 제목의 '[기업]'은 빼고 보여 준다 */
+  const scheduleTitle = (s: Schedule) =>
+    mode === "company" && company ? s.title.replace(/^\s*\[[^\]]*\]\s*/, "") || s.title : s.title;
+
+  const dropOn = (d: string) => {
+    const moving = drag;
+    setDrag(null);
+    setOverDay(null);
+    if (!moving) return;
+    const delta = diffDays(moving.from, d);
+    if (!delta) return;
+    if (moving.kind === "task") onMoveTask(moving.item, delta);
+    else onMoveSchedule(moving.item, delta);
+  };
+  const dragProps = (it: DragItem) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.effectAllowed = "move";
+      setDrag(it);
+    },
+    onDragEnd: () => {
+      setDrag(null);
+      setOverDay(null);
+    },
+  });
+
+  const selectedSchedules = schedulesOn(selected);
 
   return (
     <section aria-label="캘린더" className="min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-semibold">캘린더</h2>
         <div role="tablist" aria-label="캘린더 보기" className="flex rounded-md border border-slate-200 bg-white p-0.5">
-          {(
-            [
-              ["task", "업무 확인"],
-              ["schedule", "일정 확인"],
-            ] as const
-          ).map(([k, label]) => (
+          {MODES.map(([k, label]) => (
             <button
               key={k}
               role="tab"
@@ -77,12 +146,30 @@ export function CalendarPanel({
           ))}
         </div>
         {/* 업무 추가는 왼쪽 칸반보드의 버튼을 쓴다 */}
-        {mode === "schedule" && (
-          <Button variant="primary" onClick={onAdd}>
+        {mode !== "task" && (
+          <Button variant="primary" onClick={() => onAdd(selected)}>
             + 새 일정
           </Button>
         )}
       </div>
+
+      {mode === "company" && (
+        <div className="mb-3 flex items-center gap-2">
+          <Select
+            ariaLabel="기업 선택"
+            className="w-auto min-w-40"
+            value={company}
+            options={[
+              { value: ALL_COMPANIES, label: "기업 전체" },
+              ...companies.map((c) => ({ value: c, label: c })),
+            ]}
+            onChange={onCompanyChange}
+          />
+          <p className="text-xs text-slate-500">
+            일경험 일정 중 제목이 <b className="font-medium">[기업명]</b>으로 시작하는 일정이에요.
+          </p>
+        </div>
+      )}
 
       <div className="mb-3 flex items-center gap-2">
         <Button className="px-2" onClick={() => onMove(-1)} aria-label="이전 달">
@@ -103,15 +190,17 @@ export function CalendarPanel({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs text-slate-500">
-          {WEEKDAYS.map((w, i) => (
-            <div key={w} className={cn("py-1.5", i === 0 && "text-rose-500", i === 6 && "text-blue-500")}>
-              {w}
-            </div>
-          ))}
+        <div className={cn(gridCls, "border-b border-slate-200 bg-slate-50 text-center text-xs text-slate-500")}>
+          {WEEKDAYS.map((w, i) =>
+            weekdaysOnly && (i === 0 || i === 6) ? null : (
+              <div key={w} className={cn("py-1.5", i === 0 && "text-rose-500", i === 6 && "text-blue-500")}>
+                {w}
+              </div>
+            ),
+          )}
         </div>
-        <div className="grid grid-cols-7">
-          {days.map((d, i) => {
+        <div className={gridCls}>
+          {cells.map((d, i) => {
             const inMonth = d.startsWith(monthPrefix);
             const items = mode === "task" ? tasksOn(d) : schedulesOn(d);
             const open = expanded === d;
@@ -125,22 +214,51 @@ export function CalendarPanel({
                 aria-pressed={selected === d}
                 onClick={() => onSelect(d)}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(d)}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  if (overDay !== d) setOverDay(d);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  dropOn(d);
+                }}
                 className={cn(
-                  "min-h-16 min-w-0 cursor-pointer border-slate-100 p-1 text-left sm:min-h-28 sm:p-1.5",
-                  i % 7 !== 6 && "border-r",
-                  i < days.length - 7 && "border-b",
+                  "group/cell min-h-16 min-w-0 cursor-pointer border-slate-100 p-1 text-left sm:min-h-28 sm:p-1.5",
+                  i % cols !== cols - 1 && "border-r",
+                  i < cells.length - cols && "border-b",
                   !inMonth && "bg-slate-50/70",
                   selected === d && "bg-indigo-50/60 ring-1 ring-indigo-300 ring-inset",
+                  drag && overDay === d && "bg-indigo-100/70 ring-2 ring-indigo-400 ring-inset",
                 )}
               >
-                <span
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
-                    d === today ? "bg-indigo-600 font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-300",
-                  )}
-                >
-                  {Number(d.slice(8))}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span
+                    className={cn(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                      d === today ? "bg-indigo-600 font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-300",
+                    )}
+                  >
+                    {Number(d.slice(8))}
+                  </span>
+                  {/* 이 날짜에 바로 추가: 업무 확인이면 업무, 일정 캘린더면 일정 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(d);
+                      if (mode === "task") onAddTask(d);
+                      else onAdd(d);
+                    }}
+                    aria-label={`${shortDate(d)}에 ${mode === "task" ? "업무" : "일정"} 추가`}
+                    title={`이 날 ${mode === "task" ? "업무" : "일정"} 추가`}
+                    className={cn(
+                      "hidden h-5 w-5 items-center justify-center rounded text-sm leading-none text-slate-400 hover:bg-indigo-100 hover:text-indigo-700 sm:flex",
+                      selected === d ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100 focus:opacity-100",
+                    )}
+                  >
+                    +
+                  </button>
+                </div>
 
                 {/* 좁은 화면: 개수만 점으로 표시 */}
                 {items.length > 0 && (
@@ -157,18 +275,20 @@ export function CalendarPanel({
                   </div>
                 )}
 
-                {/* 넓은 화면: 항목 제목 표시 */}
+                {/* 넓은 화면: 항목 제목 표시. 끌어서 다른 날짜에 놓으면 날짜가 바뀐다 */}
                 <ul className="mt-1 hidden space-y-0.5 sm:block">
                   {mode === "task"
                     ? (items as Task[]).slice(0, shown).map((t) => (
                         <li key={t.id}>
                           <button
+                            {...dragProps({ kind: "task", item: t, from: d })}
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenTask(t);
                             }}
                             className={cn(
-                              "flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-100",
+                              "flex w-full cursor-grab items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-100 active:cursor-grabbing",
+                              drag?.item.id === t.id && "opacity-40",
                               t.status === "완료"
                                 ? "text-slate-400 line-through"
                                 : rangeEnd(t) < today
@@ -190,16 +310,18 @@ export function CalendarPanel({
                     : (items as Schedule[]).slice(0, shown).map((s) => (
                         <li key={s.id}>
                           <button
+                            {...dragProps({ kind: "schedule", item: s, from: d })}
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenSchedule(s);
                             }}
                             className={cn(
-                              "flex w-full items-center truncate rounded px-1 py-0.5 text-left text-[11px] hover:opacity-80",
+                              "flex w-full cursor-grab items-center truncate rounded px-1 py-0.5 text-left text-[11px] hover:opacity-80 active:cursor-grabbing",
+                              drag?.item.id === s.id && "opacity-40",
                               CATEGORY_STYLE[s.category].badge,
                             )}
                           >
-                            <span className="truncate">{s.title}</span>
+                            <span className="truncate">{scheduleTitle(s)}</span>
                           </button>
                         </li>
                       ))}
@@ -220,6 +342,48 @@ export function CalendarPanel({
             );
           })}
         </div>
+      </div>
+
+      {/* 선택한 날짜: 업무·일정 추가, 일정 캘린더에서는 그날 일정 목록까지 */}
+      <div className="mt-3 rounded-lg border border-slate-200 bg-white">
+        <div className={cn("flex flex-wrap items-center gap-2 px-3 py-2", mode !== "task" && "border-b border-slate-100")}>
+          <h3 className="mr-auto text-sm font-semibold">
+            {shortDate(selected)}
+            {mode !== "task" && (
+              <>
+                {" "}
+                일정 <span className="font-normal text-slate-500">{selectedSchedules.length}</span>
+              </>
+            )}
+          </h3>
+          <Button className="text-xs" onClick={() => onAddTask(selected)}>
+            + 이 날 업무 추가
+          </Button>
+          <Button className="text-xs" onClick={() => onAdd(selected)}>
+            + 이 날 일정 추가
+          </Button>
+        </div>
+        {mode !== "task" &&
+          (selectedSchedules.length ? (
+            <ul className="divide-y divide-slate-100">
+              {selectedSchedules.map((s) => (
+                <li key={s.id}>
+                  <button
+                    onClick={() => onOpenSchedule(s)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                  >
+                    <CategoryBadge c={s.category} />
+                    <span className="min-w-0 flex-1 truncate text-sm">{s.title}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{rangeLabel(s)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="p-4">
+              <Empty>이 날짜에 일정이 없습니다.</Empty>
+            </div>
+          ))}
       </div>
     </section>
   );
