@@ -11,7 +11,7 @@ const COLUMN_STYLE: Record<LinkCategory, string> = {
   일경험: "border-t-emerald-500",
 };
 
-/** 취업운영 | 일경험 두 열, 열 안에서는 서비스 종류별로 묶어 보여 준다 */
+/** 일경험 | 취업운영 두 열, 열 안에서는 서비스 종류별로 묶어 보여 준다 */
 export function LinksView({ initialLinks }: { initialLinks: LinkItem[] }) {
   const [links, setLinks] = useState(initialLinks);
   const [modal, setModal] = useState<{ link?: LinkItem; category: LinkCategory } | null>(null);

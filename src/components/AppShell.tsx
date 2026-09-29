@@ -17,7 +17,7 @@ const NAV = [
   },
   {
     group: "자주 보는 링크",
-    items: [{ href: "/links", label: "취업운영 · 일경험", icon: "↗" }],
+    items: [{ href: "/links", label: "일경험 · 취업운영", icon: "↗" }],
   },
 ];
 

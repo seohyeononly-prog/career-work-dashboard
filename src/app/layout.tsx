@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "업무 대시보드",
-  description: "취업운영·일경험 개인 업무 대시보드",
+  description: "일경험·취업운영 개인 업무 대시보드",
   icons: { icon: "/app-icon.svg", apple: "/app-icon.svg" },
 };
 

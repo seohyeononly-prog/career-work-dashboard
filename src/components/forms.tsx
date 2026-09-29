@@ -214,7 +214,7 @@ const draftOf = (
     ? { title: item.title, category: item.category, startDate: item.startDate, endDate: item.endDate }
     : {
         title: defaults.title ?? "",
-        category: defaults.category ?? "취업운영",
+        category: defaults.category ?? CATEGORIES[0],
         startDate: defaults.date ?? todayStr(),
         endDate: "",
       };

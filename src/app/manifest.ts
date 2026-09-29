@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "업무 대시보드",
     short_name: "업무 대시보드",
-    description: "취업운영·일경험 개인 업무 대시보드",
+    description: "일경험·취업운영 개인 업무 대시보드",
     lang: "ko",
     start_url: "/",
     scope: "/",

@@ -1,11 +1,11 @@
 // 공통 타입과 상수. 서버·클라이언트 양쪽에서 사용한다.
 
 /** 업무·일정 카테고리 */
-export const CATEGORIES = ["취업운영", "일경험", "기타"] as const;
+export const CATEGORIES = ["일경험", "취업운영", "기타"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 /** 링크 카테고리 (링크 화면이 두 개로 나뉘어 있어 기타는 없음) */
-export const LINK_CATEGORIES = ["취업운영", "일경험"] as const;
+export const LINK_CATEGORIES = ["일경험", "취업운영"] as const;
 export type LinkCategory = (typeof LINK_CATEGORIES)[number];
 
 export const TASK_STATUSES = ["대기", "완료"] as const;
