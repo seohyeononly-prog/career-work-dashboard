@@ -124,21 +124,31 @@ export async function deleteTask(id: string): Promise<{ ok: true }> {
   return { ok: true };
 }
 
-/** 칸반 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 수정일은 바꾸지 않는다. */
-export async function reorderTasks(input: unknown): Promise<{ ok: true }> {
+/** 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 순서 열만 바꾼다. */
+async function reorder<T extends { id: string; order: number }>(
+  def: TableDef<T>,
+  devKey: "tasks" | "links",
+  invalidate: () => void,
+  input: unknown,
+  what: string,
+): Promise<{ ok: true }> {
   const ids = (input as { ids?: unknown } | null)?.ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every((x) => typeof x === "string"))
-    throw new ValidationError("순서를 바꿀 업무 목록이 올바르지 않습니다.");
+    throw new ValidationError(`순서를 바꿀 ${what} 목록이 올바르지 않습니다.`);
   const order = new Map(ids.map((id: string, i) => [id, i + 1]));
   if (getDataSource() === "dev") {
-    for (const t of devDb().tasks) if (order.has(t.id)) t.order = order.get(t.id)!;
+    for (const x of devDb()[devKey]) if (order.has(x.id)) x.order = order.get(x.id)!;
   } else {
     await ensureSheets(ALL_TABLES);
-    await updateColumn(TasksTable, TasksTable.headers.indexOf("순서") + 1, order);
-    tasksRepo.invalidate();
+    await updateColumn(def, def.headers.indexOf("순서") + 1, order);
+    invalidate();
   }
   return { ok: true };
 }
+
+/** 칸반 드래그 결과. 수정일은 바꾸지 않는다. */
+export const reorderTasks = (input: unknown) =>
+  reorder(TasksTable, "tasks", tasksRepo.invalidate, input, "업무");
 
 export async function updateTask(id: string, patch: unknown): Promise<Task> {
   const current = await tasksRepo.get(id);
@@ -170,14 +180,19 @@ export const listLinks = () => linksRepo.list();
 
 export async function createLink(input: unknown): Promise<LinkItem> {
   const data = parse(linkInputSchema, input);
-  return linksRepo.insert({ id: newId("L"), ...data });
+  // 새 링크는 순서 0 → 그룹 맨 아래
+  return linksRepo.insert({ id: newId("L"), ...data, order: 0 });
 }
 
 export async function updateLink(id: string, patch: unknown): Promise<LinkItem> {
   const current = await linksRepo.get(id);
   const data = parse(linkInputSchema, { ...current, ...(patch as object) });
-  return linksRepo.replace({ ...data, id });
+  return linksRepo.replace({ ...current, ...data, id });
 }
+
+/** 링크 화면 드래그 결과 */
+export const reorderLinks = (input: unknown) =>
+  reorder(LinksTable, "links", linksRepo.invalidate, input, "링크");
 
 export async function deleteLink(id: string): Promise<{ ok: true }> {
   await linksRepo.remove(id);

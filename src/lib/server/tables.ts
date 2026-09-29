@@ -84,8 +84,8 @@ export const SchedulesTable: TableDef<Schedule> = {
 
 export const LinksTable: TableDef<LinkItem> = {
   sheet: "Links",
-  headers: ["링크 ID", "링크명", "URL", "카테고리", "서비스 종류", "설명", "즐겨찾기 여부"],
-  toRow: (l) => [l.id, l.name, l.url, l.category, l.service, l.description, l.favorite],
+  headers: ["링크 ID", "링크명", "URL", "카테고리", "서비스 종류", "설명", "즐겨찾기 여부", "순서"],
+  toRow: (l) => [l.id, l.name, l.url, l.category, l.service, l.description, l.favorite, l.order ? String(l.order) : ""],
   fromRow: (r) =>
     r[0]?.trim()
       ? {
@@ -96,6 +96,7 @@ export const LinksTable: TableDef<LinkItem> = {
           service: oneOf(SERVICE_TYPES, r[4], "기타"),
           description: r[5] ?? "",
           favorite: truthy(r[6]),
+          order: Number(r[7]) || 0,
         }
       : null,
 };

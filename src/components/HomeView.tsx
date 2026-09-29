@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, slugOf, type LinkItem, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, type LinkItem, type Schedule, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
 import { CompleteCheckbox, DueBadge } from "./TaskItem";
@@ -168,7 +168,7 @@ export function HomeView({
                 <div key={c}>
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-semibold text-slate-500">{c}</p>
-                    <Link href={`/links/${slugOf(c)}`} className="text-xs text-indigo-600 hover:underline">
+                    <Link href="/links" className="text-xs text-indigo-600 hover:underline">
                       전체 링크
                     </Link>
                   </div>

@@ -48,11 +48,13 @@ export interface LinkItem {
   service: ServiceType;
   description: string;
   favorite: boolean;
+  /** 링크 화면 순서(작을수록 위). 0이면 아직 정하지 않은 것(그룹 맨 아래) */
+  order: number;
 }
 
 export type TaskInput = Omit<Task, "id" | "order" | "createdAt" | "updatedAt">;
 export type ScheduleInput = Omit<Schedule, "id">;
-export type LinkInput = Omit<LinkItem, "id">;
+export type LinkInput = Omit<LinkItem, "id" | "order">;
 
 export type DataSource = "sheets" | "dev";
 
@@ -68,10 +70,6 @@ export const byOrder = (a: Task, b: Task) =>
   a.startDate.localeCompare(b.startDate) ||
   a.title.localeCompare(b.title, "ko");
 
-/** 링크 화면 URL 경로(slug)와 카테고리 매핑 */
-export const CATEGORY_SLUGS: Record<string, LinkCategory> = {
-  employment: "취업운영",
-  "work-experience": "일경험",
-};
-export const slugOf = (c: LinkCategory) =>
-  c === "취업운영" ? "employment" : "work-experience";
+/** 링크 표시 순서: 드래그로 정한 순서 → 링크명 */
+export const byLinkOrder = (a: LinkItem, b: LinkItem) =>
+  (a.order || Infinity) - (b.order || Infinity) || a.name.localeCompare(b.name, "ko");
