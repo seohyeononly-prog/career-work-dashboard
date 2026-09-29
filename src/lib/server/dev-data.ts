@@ -26,6 +26,7 @@ export function createDevData(): { tasks: Task[]; schedules: Schedule[]; links: 
     status,
     startDate: d(startOffset),
     endDate: endOffset === undefined ? "" : d(endOffset),
+    order: 0,
     createdAt: now,
     updatedAt: now,
   });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { upsert } from "@/lib/client-api";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, TASK_STATUSES, covers, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
+import { CATEGORIES, TASK_STATUSES, byOrder, covers, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
 import { CalendarPanel, type CalendarMode } from "./CalendarPanel";
 import { ScheduleFormModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
@@ -24,6 +24,43 @@ const COLUMN_STYLE: Record<TaskStatus, string> = {
 
 const ymOf = (d: string) => ({ y: Number(d.slice(0, 4)), m: Number(d.slice(5, 7)) });
 
+const WBS_URL =
+  "https://docs.google.com/spreadsheets/d/1rzAz-WZI-wsCtXZ_CDMRQjKe3mwi58HTDuvw7MqQ8dY/edit?gid=1496926969#gid=1496926969&range=";
+const WBS_DEFAULT_CELL = "A60";
+const WBS_CELL_KEY = "wbs-cell";
+const isCell = (v: string) => /^[A-Z]{1,3}\d{1,6}$/.test(v);
+const noSubscribe = () => () => {};
+
+/** 클립보드 API가 막힌 환경(http 접속, 일부 웹뷰)에서는 예전 방식으로 복사한다 */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {}
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.cssText = "position:fixed;opacity:0";
+  document.body.appendChild(el);
+  el.select();
+  const ok = document.execCommand("copy");
+  el.remove();
+  if (!ok) throw new Error("copy failed");
+}
+function readWbsCell() {
+  try {
+    const saved = localStorage.getItem(WBS_CELL_KEY);
+    if (saved && isCell(saved)) return saved;
+  } catch {}
+  return WBS_DEFAULT_CELL;
+}
+
+/** 복사 버튼 형식: 마감보고는 본부명을 앞에 붙인다 */
+const COPY_FORMATS = {
+  report: { label: "마감보고 복사", line: (t: Task) => `[교육사업본부] ${t.category} ${t.title}` },
+  wbs: { label: "WBS 복사", line: (t: Task) => `${t.category} ${t.title}` },
+} as const;
+type CopyKind = keyof typeof COPY_FORMATS;
+
 /** 칸반보드(왼쪽) + 캘린더(오른쪽) 한 화면 */
 export function WorkView({
   initialTasks,
@@ -35,7 +72,7 @@ export function WorkView({
   initialMode: CalendarMode;
 }) {
   const today = todayStr();
-  const { tasks, busyId, error, toggle, save } = useTasks(initialTasks);
+  const { tasks, busyId, error, toggle, save, reorder } = useTasks(initialTasks);
   const [schedules, setSchedules] = useState(initialSchedules);
   const [date, setDate] = useState(today);
   const [ym, setYm] = useState(ymOf(today));
@@ -43,6 +80,20 @@ export function WorkView({
   const [category, setCategory] = useState<Category | All>("전체");
   const [status, setStatus] = useState<TaskStatus | All>("전체");
   const [modal, setModal] = useState<Modal>(null);
+  const [copied, setCopied] = useState<{ kind: CopyKind; msg: string } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
+
+  // WBS 셀 위치는 이 브라우저에 기억해 둔다 (입력 전에는 저장된 값을 보여 줌)
+  const savedWbsCell = useSyncExternalStore(noSubscribe, readWbsCell, () => WBS_DEFAULT_CELL);
+  const [editedWbsCell, setWbsCell] = useState<string | null>(null);
+  const wbsCell = editedWbsCell ?? savedWbsCell;
+  const changeWbsCell = (v: string) => {
+    const cell = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    setWbsCell(cell);
+    try {
+      if (isCell(cell)) localStorage.setItem(WBS_CELL_KEY, cell);
+    } catch {}
+  };
 
   /** 날짜를 고르면 칸반보드가 바뀌고, 캘린더도 그 달로 이동한다 */
   const selectDate = (d: string) => {
@@ -62,10 +113,42 @@ export function WorkView({
     window.history.replaceState(null, "", url);
   };
 
-  const dayTasks = tasks
-    .filter((t) => covers(t, date) && (category === "전체" || t.category === category))
-    .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, "ko"));
+  /** 선택한 날짜의 업무 전체(필터 무관). 드래그 순서와 복사 순서의 기준 */
+  const allDayTasks = tasks.filter((t) => covers(t, date)).sort(byOrder);
+  const dayTasks = allDayTasks.filter((t) => category === "전체" || t.category === category);
   const columns = status === "전체" ? TASK_STATUSES : [status];
+
+  /** 끌던 카드를 같은 열의 대상 카드 앞/뒤로 옮기고, 그날 업무 전체에 순서를 다시 매긴다 */
+  const dropOn = (target: Task, after: boolean) => {
+    const moving = allDayTasks.find((t) => t.id === drag?.id);
+    setDrag(null);
+    if (!moving || moving.id === target.id || moving.status !== target.status) return;
+    const rest = allDayTasks.filter((t) => t.id !== moving.id);
+    const at = rest.findIndex((t) => t.id === target.id) + (after ? 1 : 0);
+    const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
+    if (next.every((t, i) => t.id === allDayTasks[i].id && t.order === i + 1)) return;
+    reorder(next.map((t) => t.id));
+  };
+
+  /** 선택한 날짜의 업무 전체를 칸반 순서대로 한 줄씩 복사한다 */
+  const copyTasks = async (kind: CopyKind) => {
+    const lines = allDayTasks.map(COPY_FORMATS[kind].line);
+    let msg: string;
+    if (!lines.length) msg = "복사할 업무가 없습니다";
+    else {
+      try {
+        await copyText(lines.join("\n"));
+        msg = `${lines.length}건 복사됨`;
+      } catch {
+        msg = "복사 실패";
+      }
+    }
+    // 새 탭을 먼저 열면 문서 포커스를 잃어 클립보드 쓰기가 실패하므로 복사 후에 연다
+    if (kind === "wbs")
+      window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
+    setCopied({ kind, msg });
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
@@ -117,6 +200,21 @@ export function WorkView({
             onChange={setStatus}
           />
         </div>
+        <div className="mb-3 grid grid-cols-[1fr_1fr_4.5rem] gap-1.5">
+          {(Object.keys(COPY_FORMATS) as CopyKind[]).map((k) => (
+            <Button key={k} onClick={() => copyTasks(k)} aria-live="polite">
+              {copied?.kind === k ? copied.msg : COPY_FORMATS[k].label}
+            </Button>
+          ))}
+          <input
+            value={wbsCell}
+            onChange={(e) => changeWbsCell(e.target.value)}
+            aria-label="WBS 복사 시 열 셀 위치"
+            title="WBS 복사 시 열 셀 위치"
+            placeholder={WBS_DEFAULT_CELL}
+            className={cn(inputCls, "text-center", !isCell(wbsCell) && "border-rose-400")}
+          />
+        </div>
         {error && (
           <div className="mb-3">
             <ErrorNote message={error} />
@@ -140,15 +238,44 @@ export function WorkView({
                   <span className="text-xs text-slate-500">{list.length}</span>
                 </header>
                 <div className="flex flex-1 flex-col gap-1.5 px-1.5 pb-1.5">
-                  {list.map((t) => (
-                    <TaskCard
-                      key={t.id}
-                      task={t}
-                      busy={busyId === t.id}
-                      onToggle={toggle}
-                      onOpen={(task) => setModal({ kind: "task", task })}
-                    />
-                  ))}
+                  {list.map((t) => {
+                    const over = drag?.over?.id === t.id ? drag.over : null;
+                    return (
+                      <div
+                        key={t.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          setDrag({ id: t.id });
+                        }}
+                        onDragEnd={() => setDrag(null)}
+                        onDragOver={(e) => {
+                          const moving = drag && tasks.find((x) => x.id === drag.id);
+                          if (!moving || moving.id === t.id || moving.status !== t.status) return;
+                          e.preventDefault();
+                          const r = e.currentTarget.getBoundingClientRect();
+                          const after = e.clientY > r.top + r.height / 2;
+                          if (over?.after !== after) setDrag({ id: moving.id, over: { id: t.id, after } });
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (over) dropOn(t, over.after);
+                        }}
+                        className={cn(
+                          "-my-0.5 border-y-2 border-transparent py-px",
+                          drag?.id === t.id && "opacity-40",
+                          over && (over.after ? "border-b-indigo-500" : "border-t-indigo-500"),
+                        )}
+                      >
+                        <TaskCard
+                          task={t}
+                          busy={busyId === t.id}
+                          onToggle={toggle}
+                          onOpen={(task) => setModal({ kind: "task", task })}
+                        />
+                      </div>
+                    );
+                  })}
                   {!list.length && <Empty>업무가 없습니다.</Empty>}
                 </div>
               </section>

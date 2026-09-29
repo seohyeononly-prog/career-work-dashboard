@@ -16,6 +16,7 @@ export const api = {
   createTask: (v: TaskInput) => request<Task>("/api/tasks", "POST", v),
   updateTask: (id: string, v: Partial<TaskInput>) =>
     request<Task>(`/api/tasks/${encodeURIComponent(id)}`, "PATCH", v),
+  reorderTasks: (ids: string[]) => request<{ ok: true }>("/api/tasks/order", "PUT", { ids }),
   createSchedule: (v: ScheduleInput) => request<Schedule>("/api/schedules", "POST", v),
   updateSchedule: (id: string, v: Partial<ScheduleInput>) =>
     request<Schedule>(`/api/schedules/${encodeURIComponent(id)}`, "PATCH", v),

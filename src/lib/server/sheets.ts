@@ -96,10 +96,12 @@ export function ensureSheets(defs: TableDef<{ id: string }>[]): Promise<void> {
         const head = await call<{ values?: string[][] }>(
           `/values/${encodeURIComponent(`${d.sheet}!1:1`)}`,
         );
-        if (!head.values?.[0]?.length) {
-          const range = `${d.sheet}!A1:${colLetter(d.headers.length)}1`;
+        // 비어 있으면 전체를, 나중에 추가된 열(예: 순서)의 헤더가 없으면 그 칸만 쓴다
+        const have = head.values?.[0]?.length ?? 0;
+        if (have < d.headers.length) {
+          const range = `${d.sheet}!${colLetter(have + 1)}1:${colLetter(d.headers.length)}1`;
           await call(`/values/${encodeURIComponent(range)}?valueInputOption=RAW`, "PUT", {
-            values: [d.headers],
+            values: [d.headers.slice(have)],
           });
         }
       }
@@ -139,4 +141,22 @@ export async function updateRow<T extends { id: string }>(def: TableDef<T>, item
   await call(`/values/${encodeURIComponent(range)}?valueInputOption=RAW`, "PUT", {
     values: [def.toRow(item)],
   });
+}
+
+/** 여러 행의 한 열(col은 1부터)만 한 번에 바꾼다 */
+export async function updateColumn<T extends { id: string }>(
+  def: TableDef<T>,
+  col: number,
+  values: Map<string, string | number>,
+) {
+  const ids = await call<{ values?: string[][] }>(
+    `/values/${encodeURIComponent(`${def.sheet}!A:A`)}`,
+  );
+  const data = (ids.values ?? []).flatMap((r, i) => {
+    const id = r[0]?.trim();
+    return i > 0 && id && values.has(id)
+      ? [{ range: `${def.sheet}!${colLetter(col)}${i + 1}`, values: [[values.get(id)]] }]
+      : [];
+  });
+  if (data.length) await call("/values:batchUpdate", "POST", { valueInputOption: "RAW", data });
 }

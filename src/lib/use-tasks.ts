@@ -31,5 +31,19 @@ export function useTasks(initial: Task[]) {
 
   const save = (t: Task) => setTasks((l) => upsert(l, t));
 
-  return { tasks, busyId, error, toggle, changeStatus, save };
+  /** 드래그로 정한 순서(ids)를 1, 2, 3… 으로 저장한다 */
+  const reorder = async (ids: string[]) => {
+    setError("");
+    const prev = tasks;
+    const order = new Map(ids.map((id, i) => [id, i + 1]));
+    setTasks((l) => l.map((t) => (order.has(t.id) ? { ...t, order: order.get(t.id)! } : t)));
+    try {
+      await api.reorderTasks(ids);
+    } catch (e) {
+      setTasks(prev);
+      setError((e as Error).message);
+    }
+  };
+
+  return { tasks, busyId, error, toggle, changeStatus, save, reorder };
 }

@@ -28,6 +28,8 @@ export interface Task extends DateRange {
   title: string;
   category: Category;
   status: TaskStatus;
+  /** 칸반에서 드래그로 정한 순서. 0이면 아직 정하지 않은 것(맨 뒤) */
+  order: number;
   createdAt: string; // YYYY-MM-DD HH:mm
   updatedAt: string; // YYYY-MM-DD HH:mm
 }
@@ -48,7 +50,7 @@ export interface LinkItem {
   favorite: boolean;
 }
 
-export type TaskInput = Omit<Task, "id" | "createdAt" | "updatedAt">;
+export type TaskInput = Omit<Task, "id" | "order" | "createdAt" | "updatedAt">;
 export type ScheduleInput = Omit<Schedule, "id">;
 export type LinkInput = Omit<LinkItem, "id">;
 
@@ -59,6 +61,12 @@ export const rangeEnd = (r: DateRange) => r.endDate || r.startDate;
 
 /** 해당 날짜가 기간 안에 있는지 */
 export const covers = (r: DateRange, day: string) => r.startDate <= day && rangeEnd(r) >= day;
+
+/** 칸반 표시 순서: 드래그로 정한 순서 → 시작일 → 업무명 */
+export const byOrder = (a: Task, b: Task) =>
+  (a.order || Infinity) - (b.order || Infinity) ||
+  a.startDate.localeCompare(b.startDate) ||
+  a.title.localeCompare(b.title, "ko");
 
 /** 링크 화면 URL 경로(slug)와 카테고리 매핑 */
 export const CATEGORY_SLUGS: Record<string, LinkCategory> = {

@@ -5,7 +5,7 @@ import type { DataSource, LinkItem, Schedule, Task } from "../types";
 import type { z } from "zod";
 import { firstIssue, linkInputSchema, scheduleInputSchema, taskInputSchema } from "../validation";
 import { createDevData } from "./dev-data";
-import { appendRow, ensureSheets, isSheetsConfigured, readAll, updateRow } from "./sheets";
+import { appendRow, ensureSheets, isSheetsConfigured, readAll, updateColumn, updateRow } from "./sheets";
 import { LinksTable, SchedulesTable, TasksTable, type TableDef } from "./tables";
 
 // 데이터 접근 계층. 환경변수가 설정되어 있으면 Google Sheets,
@@ -82,7 +82,22 @@ export const listTasks = () => tasksRepo.list();
 export async function createTask(input: unknown): Promise<Task> {
   const data = parse(taskInputSchema, input);
   const now = nowStr();
-  return tasksRepo.insert({ id: newId("T"), ...data, createdAt: now, updatedAt: now });
+  return tasksRepo.insert({ id: newId("T"), ...data, order: 0, createdAt: now, updatedAt: now });
+}
+
+/** 칸반 드래그 결과: ids 순서대로 1, 2, 3… 을 매긴다. 수정일은 바꾸지 않는다. */
+export async function reorderTasks(input: unknown): Promise<{ ok: true }> {
+  const ids = (input as { ids?: unknown } | null)?.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every((x) => typeof x === "string"))
+    throw new ValidationError("순서를 바꿀 업무 목록이 올바르지 않습니다.");
+  const order = new Map(ids.map((id: string, i) => [id, i + 1]));
+  if (getDataSource() === "dev") {
+    for (const t of devDb().tasks) if (order.has(t.id)) t.order = order.get(t.id)!;
+  } else {
+    await ensureSheets(ALL_TABLES);
+    await updateColumn(TasksTable, TasksTable.headers.indexOf("순서") + 1, order);
+  }
+  return { ok: true };
 }
 
 export async function updateTask(id: string, patch: unknown): Promise<Task> {

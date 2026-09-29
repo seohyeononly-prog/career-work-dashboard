@@ -50,8 +50,8 @@ const truthy = (v: string | undefined) => /^(true|y|yes|1|o|예)$/i.test((v ?? "
 
 export const TasksTable: TableDef<Task> = {
   sheet: "Tasks",
-  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일"],
-  toRow: (t) => [t.id, t.title, t.category, t.status, t.startDate, t.endDate, t.createdAt, t.updatedAt],
+  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서"],
+  toRow: (t) => [t.id, t.title, t.category, t.status, t.startDate, t.endDate, t.createdAt, t.updatedAt, t.order ? String(t.order) : ""],
   fromRow: (r) =>
     r[0]?.trim()
       ? {
@@ -62,6 +62,7 @@ export const TasksTable: TableDef<Task> = {
           ...readRange(r[4], r[5]),
           createdAt: normDateTime(r[6]),
           updatedAt: normDateTime(r[7]),
+          order: Number(r[8]) || 0,
         }
       : null,
 };
