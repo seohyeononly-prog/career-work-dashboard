@@ -1,5 +1,5 @@
 // 브라우저에서 호출하는 API 래퍼. 자격 증명 없이 우리 서버의 /api 라우트만 호출한다.
-import type { LinkInput, LinkItem, Schedule, ScheduleInput, Shortcut, ShortcutInput, Task, TaskInput } from "./types";
+import type { LinkInput, LinkItem, Schedule, ScheduleInput, Task, TaskInput } from "./types";
 
 async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -28,12 +28,6 @@ export const api = {
     request<LinkItem>(`/api/links/${encodeURIComponent(id)}`, "PATCH", v),
   deleteLink: (id: string) => request<{ ok: true }>(`/api/links/${encodeURIComponent(id)}`, "DELETE"),
   reorderLinks: (ids: string[]) => request<{ ok: true }>("/api/links/order", "PUT", { ids }),
-  createShortcut: (v: ShortcutInput) => request<Shortcut>("/api/shortcuts", "POST", v),
-  updateShortcut: (id: string, v: Partial<ShortcutInput>) =>
-    request<Shortcut>(`/api/shortcuts/${encodeURIComponent(id)}`, "PATCH", v),
-  deleteShortcut: (id: string) =>
-    request<{ ok: true }>(`/api/shortcuts/${encodeURIComponent(id)}`, "DELETE"),
-  reorderShortcuts: (ids: string[]) => request<{ ok: true }>("/api/shortcuts/order", "PUT", { ids }),
 };
 
 /** 목록에서 같은 ID 항목을 교체하거나 새로 추가 */

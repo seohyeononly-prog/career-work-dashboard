@@ -14,8 +14,6 @@ import {
   type LinkInput,
   type LinkItem,
   type Schedule,
-  type Shortcut,
-  type ShortcutInput,
   type Task,
   companyOf,
   withCompany,
@@ -518,61 +516,3 @@ export function LinkFormModal({
   );
 }
 
-// ---------- 사이드바 바로가기 버튼 ----------
-export function ShortcutFormModal({
-  shortcut,
-  onClose,
-  onSaved,
-  onDeleted,
-}: {
-  shortcut?: Shortcut;
-  onClose: () => void;
-  onSaved: (s: Shortcut) => void;
-  onDeleted?: (id: string) => void;
-}) {
-  const [v, setV] = useState<ShortcutInput>({ name: shortcut?.name ?? "", url: shortcut?.url ?? "" });
-  const { saving, error: saveError, submit } = useSubmit(
-    () => (shortcut ? api.updateShortcut(shortcut.id, v) : api.createShortcut(v)),
-    onSaved,
-  );
-  const { error: deleteError, del } = useDelete(
-    `'${shortcut?.name}' 버튼을`,
-    shortcut && onDeleted
-      ? async () => {
-          await api.deleteShortcut(shortcut.id);
-          onDeleted(shortcut.id);
-        }
-      : undefined,
-  );
-  const error = saveError || deleteError;
-
-  return (
-    <Modal title={shortcut ? "버튼 수정" : "사이드바 버튼 추가"} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <Field label="버튼 이름">
-          <input
-            className={inputCls}
-            value={v.name}
-            maxLength={30}
-            placeholder="예: 그룹웨어"
-            onChange={(e) => setV((s) => ({ ...s, name: e.target.value }))}
-            required
-            autoFocus
-          />
-        </Field>
-        <Field label="URL">
-          <input
-            type="url"
-            className={inputCls}
-            placeholder="https://"
-            value={v.url}
-            onChange={(e) => setV((s) => ({ ...s, url: e.target.value }))}
-            required
-          />
-        </Field>
-        {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} del={del} />
-      </form>
-    </Modal>
-  );
-}

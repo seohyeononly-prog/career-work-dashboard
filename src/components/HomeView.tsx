@@ -161,19 +161,14 @@ export function HomeView({
         </Card>
 
         <Card title="자주 보는 링크" className="lg:col-span-3">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             {LINK_CATEGORIES.map((c) => {
               const list = favorites.filter((l) => l.category === c);
               return (
                 <div key={c}>
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-500">{c}</p>
-                    <Link href="/links" className="text-xs text-indigo-600 hover:underline">
-                      전체 링크
-                    </Link>
-                  </div>
+                  <p className="mb-1 text-xs font-semibold text-slate-500">{c}</p>
                   {list.length ? (
-                    <ul className="grid gap-2 sm:grid-cols-2">
+                    <ul className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
                       {list.map((l) => (
                         <li key={l.id}>
                           <a
@@ -189,7 +184,7 @@ export function HomeView({
                       ))}
                     </ul>
                   ) : (
-                    <Empty>즐겨찾기한 링크가 없습니다.</Empty>
+                    <Empty>즐겨찾기한 링크가 없습니다. 사이드바에서 링크를 수정해 즐겨찾기할 수 있어요.</Empty>
                   )}
                 </div>
               );

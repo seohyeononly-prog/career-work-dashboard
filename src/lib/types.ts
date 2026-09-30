@@ -4,8 +4,8 @@
 export const CATEGORIES = ["일경험", "취업운영", "기타"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-/** 링크 카테고리 (링크 화면이 두 개로 나뉘어 있어 기타는 없음) */
-export const LINK_CATEGORIES = ["일경험", "취업운영"] as const;
+/** 링크 카테고리 (사이드바 토글 하나씩. 업무 카테고리와 달리 기타는 없고 교육사업본부가 있음) */
+export const LINK_CATEGORIES = ["일경험", "취업운영", "교육사업본부"] as const;
 export type LinkCategory = (typeof LINK_CATEGORIES)[number];
 
 export const TASK_STATUSES = ["대기", "완료"] as const;
@@ -109,15 +109,3 @@ export const scheduleTitles = (schedules: Schedule[]) => {
   return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).map(([t]) => t);
 };
 
-/** 사이드바 바로가기 버튼 */
-export interface Shortcut {
-  id: string;
-  name: string;
-  url: string;
-  /** 사이드바 순서(작을수록 위). 0이면 아직 정하지 않은 것(맨 아래) */
-  order: number;
-}
-export type ShortcutInput = Omit<Shortcut, "id" | "order">;
-
-/** 사이드바 버튼 순서: 드래그로 정한 순서 → 추가한 순서 */
-export const byShortcutOrder = (a: Shortcut, b: Shortcut) => (a.order || Infinity) - (b.order || Infinity);

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { api, upsert } from "@/lib/client-api";
-import { byShortcutOrder, type DataSource, type Shortcut } from "@/lib/types";
-import { ShortcutFormModal } from "./forms";
+import { LINK_CATEGORIES, type DataSource, type LinkCategory, type LinkItem } from "@/lib/types";
+import { LinkFormModal } from "./forms";
+import { SidebarLinks } from "./SidebarLinks";
 import { ToastProvider, useToast } from "./Toast";
 import { cn } from "./ui";
 
@@ -17,13 +18,9 @@ const NAV = [
       { href: "/kanban", label: "칸반보드 · 캘린더", icon: "▦" },
     ],
   },
-  {
-    group: "자주 보는 링크",
-    items: [{ href: "/links", label: "일경험 · 취업운영", icon: "↗" }],
-  },
 ];
 
-function Nav({ onNavigate }: { onNavigate?: () => void }) {
+function Nav({ onNavigate, children }: { onNavigate?: () => void; children?: ReactNode }) {
   const pathname = usePathname();
   return (
     <nav className="space-y-5 px-3 py-4">
@@ -55,105 +52,27 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
           </ul>
         </div>
       ))}
+      {children}
     </nav>
   );
 }
 
-const FLEX_URL = "https://flex.team/home";
+/** 사이드바 링크 토글 중 펼쳐 둔 것 (localStorage) */
+const OPEN_KEY = "sidebar-links-open";
+const noSubscribe = () => () => {};
+/** 펼쳐 둔 카테고리를 쉼표로 이은 문자열 */
+function readOpenCategories() {
+  try {
+    return localStorage.getItem(OPEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
-const shortcutCls =
-  "flex min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50";
-
-/** 사이드바 아래: flex·직접 추가한 바로가기 버튼 + 저장소(연결된 시트 열기) */
-function SidebarFooter({
-  source,
-  sheetUrl,
-  shortcuts,
-  onAdd,
-  onEdit,
-  onReorder,
-}: {
-  source: DataSource;
-  sheetUrl: string | null;
-  shortcuts: Shortcut[];
-  onAdd: () => void;
-  onEdit: (s: Shortcut) => void;
-  /** 드래그로 바꾼 순서(ids) */
-  onReorder: (ids: string[]) => void;
-}) {
-  const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
-  const list = [...shortcuts].sort(byShortcutOrder);
-
-  /** 끌던 버튼을 대상 버튼 앞/뒤로 옮긴다 */
-  const dropOn = (target: Shortcut, after: boolean) => {
-    const moving = list.find((x) => x.id === drag?.id);
-    setDrag(null);
-    if (!moving || moving.id === target.id) return;
-    const rest = list.filter((x) => x.id !== moving.id);
-    const at = rest.findIndex((x) => x.id === target.id) + (after ? 1 : 0);
-    const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
-    if (next.every((x, i) => x.id === list[i].id && x.order === i + 1)) return;
-    onReorder(next.map((x) => x.id));
-  };
-
+/** 사이드바 아래: 저장소(연결된 시트 열기) */
+function SidebarFooter({ source, sheetUrl }: { source: DataSource; sheetUrl: string | null }) {
   return (
-    <div className="mx-3 mb-4 space-y-1.5">
-      <a href={FLEX_URL} target="_blank" rel="noopener noreferrer" className={shortcutCls}>
-        flex 열기
-        <span aria-hidden>↗</span>
-      </a>
-      {list.map((s) => {
-        const over = drag?.over?.id === s.id ? drag.over : null;
-        return (
-          <div
-            key={s.id}
-            draggable
-            title="끌어서 순서 바꾸기"
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "move";
-              setDrag({ id: s.id });
-            }}
-            onDragEnd={() => setDrag(null)}
-            onDragOver={(e) => {
-              if (!drag || drag.id === s.id) return;
-              e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
-              const after = e.clientY > r.top + r.height / 2;
-              if (over?.after !== after) setDrag({ id: drag.id, over: { id: s.id, after } });
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (over) dropOn(s, over.after);
-            }}
-            className={cn(
-              "group flex cursor-grab items-center gap-1 rounded-md active:cursor-grabbing",
-              drag?.id === s.id && "opacity-40",
-              over && (over.after ? "shadow-[0_2px_0_var(--color-indigo-500)]" : "shadow-[0_-2px_0_var(--color-indigo-500)]"),
-            )}
-          >
-            {/* 링크 자체를 끌면 주소가 끌려가므로 버튼 줄 전체가 끌리도록 막는다 */}
-            <a href={s.url} target="_blank" rel="noopener noreferrer" draggable={false} className={shortcutCls}>
-              <span className="truncate">{s.name}</span>
-              <span aria-hidden>↗</span>
-            </a>
-            <button
-              onClick={() => onEdit(s)}
-              aria-label={`${s.name} 버튼 수정`}
-              title="수정"
-              className="rounded px-1 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
-            >
-              ✎
-            </button>
-          </div>
-        );
-      })}
-      <button
-        onClick={onAdd}
-        title="사이드바 버튼 추가"
-        className="ml-auto block rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-      >
-        + 버튼 추가
-      </button>
+    <div className="mx-3 mb-4">
       {source === "sheets" && sheetUrl ? (
         <a
           href={sheetUrl}
@@ -176,10 +95,10 @@ export function AppShell(props: {
   source: DataSource;
   /** 저장소 시트 주소 (Sheets 연결 시) */
   sheetUrl: string | null;
-  initialShortcuts: Shortcut[];
+  initialLinks: LinkItem[];
   children: ReactNode;
 }) {
-  // 버튼 추가·삭제 창에서도 토스트를 쓰도록 사이드바까지 감싼다
+  // 링크 추가·삭제 창에서도 토스트를 쓰도록 사이드바까지 감싼다
   return (
     <ToastProvider>
       <Shell {...props} />
@@ -190,42 +109,64 @@ export function AppShell(props: {
 function Shell({
   source,
   sheetUrl,
-  initialShortcuts,
+  initialLinks,
   children,
 }: {
   source: DataSource;
   sheetUrl: string | null;
-  initialShortcuts: Shortcut[];
+  initialLinks: LinkItem[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [shortcuts, setShortcuts] = useState(initialShortcuts);
-  const [modal, setModal] = useState<{ shortcut?: Shortcut } | null>(null);
+  const [links, setLinks] = useState(initialLinks);
+  const [linkModal, setLinkModal] = useState<{ link?: LinkItem; category: LinkCategory } | null>(null);
   const toast = useToast();
+  const router = useRouter();
 
-  /** 드래그로 정한 순서를 1, 2, 3… 으로 저장. 먼저 화면에 반영하고 실패하면 되돌린다. */
-  const reorder = async (ids: string[]) => {
-    const prev = shortcuts;
-    const order = new Map(ids.map((id, i) => [id, i + 1]));
-    setShortcuts((l) => l.map((s) => (order.has(s.id) ? { ...s, order: order.get(s.id)! } : s)));
+  // 펼친 토글은 이 브라우저에 기억한다 (누르기 전에는 저장된 값을 보여 줌)
+  const savedOpen = useSyncExternalStore(noSubscribe, readOpenCategories, () => "");
+  const [editedOpen, setEditedOpen] = useState<LinkCategory[] | null>(null);
+  const openCategories = editedOpen ?? LINK_CATEGORIES.filter((c) => savedOpen.split(",").includes(c));
+
+  const toggleCategory = (c: LinkCategory) => {
+    const next = openCategories.includes(c) ? openCategories.filter((x) => x !== c) : [...openCategories, c];
+    setEditedOpen(next);
     try {
-      await api.reorderShortcuts(ids);
+      localStorage.setItem(OPEN_KEY, next.join(","));
+    } catch {}
+  };
+
+  /** 링크가 바뀌면 홈의 즐겨찾기도 새로 읽도록 서버 화면을 다시 불러온다 */
+  const linksChanged = (update: (l: LinkItem[]) => LinkItem[]) => {
+    setLinks(update);
+    router.refresh();
+  };
+
+  /** 드래그로 정한 링크 순서를 저장. 먼저 화면에 반영하고 실패하면 되돌린다. */
+  const reorderLinks = async (ids: string[]) => {
+    const prev = links;
+    const order = new Map(ids.map((id, i) => [id, i + 1]));
+    setLinks((l) => l.map((x) => (order.has(x.id) ? { ...x, order: order.get(x.id)! } : x)));
+    try {
+      await api.reorderLinks(ids);
     } catch (e) {
-      setShortcuts(prev);
+      setLinks(prev);
       toast((e as Error).message, "error");
     }
   };
 
-  const footer = (
-    <SidebarFooter
-      source={source}
-      sheetUrl={sheetUrl}
-      shortcuts={shortcuts}
-      onAdd={() => setModal({})}
-      onEdit={(shortcut) => setModal({ shortcut })}
-      onReorder={reorder}
+  const sidebarLinks = (
+    <SidebarLinks
+      links={links}
+      openCategories={openCategories}
+      onToggle={toggleCategory}
+      onAdd={(category) => setLinkModal({ category })}
+      onEdit={(link) => setLinkModal({ link, category: link.category })}
+      onReorder={reorderLinks}
     />
   );
+
+  const footer = <SidebarFooter source={source} sheetUrl={sheetUrl} />;
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
@@ -233,7 +174,7 @@ function Shell({
       <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white md:flex">
         <div>
           <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
-          <Nav />
+          <Nav>{sidebarLinks}</Nav>
         </div>
         {footer}
       </aside>
@@ -245,7 +186,7 @@ function Shell({
           <aside className="absolute inset-y-0 left-0 flex w-60 flex-col justify-between overflow-y-auto bg-white shadow-xl">
             <div>
               <p className="px-5 pt-5 text-sm font-bold">업무 대시보드</p>
-              <Nav onNavigate={() => setOpen(false)} />
+              <Nav onNavigate={() => setOpen(false)}>{sidebarLinks}</Nav>
             </div>
             {footer}
           </aside>
@@ -274,17 +215,18 @@ function Shell({
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
 
-      {modal && (
-        <ShortcutFormModal
-          shortcut={modal.shortcut}
-          onClose={() => setModal(null)}
-          onSaved={(s) => {
-            setShortcuts((l) => upsert(l, s));
-            setModal(null);
+      {linkModal && (
+        <LinkFormModal
+          link={linkModal.link}
+          category={linkModal.category}
+          onClose={() => setLinkModal(null)}
+          onSaved={(l) => {
+            linksChanged((list) => upsert(list, l));
+            setLinkModal(null);
           }}
           onDeleted={(id) => {
-            setShortcuts((l) => l.filter((s) => s.id !== id));
-            setModal(null);
+            linksChanged((list) => list.filter((x) => x.id !== id));
+            setLinkModal(null);
           }}
         />
       )}

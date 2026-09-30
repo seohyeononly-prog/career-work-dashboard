@@ -1,6 +1,6 @@
 import "server-only";
 import { addDays, nowStr, todayStr } from "../date";
-import type { LinkItem, Schedule, Shortcut, Task } from "../types";
+import type { LinkItem, Schedule, Task } from "../types";
 
 // 개발용 예시 데이터. Google Sheets가 연결되지 않았을 때만 사용되며
 // 서버 메모리에만 있으므로 서버를 재시작하면 초기화된다.
@@ -10,7 +10,6 @@ export function createDevData(): {
   tasks: Task[];
   schedules: Schedule[];
   links: LinkItem[];
-  shortcuts: Shortcut[];
 } {
   const t = todayStr();
   const d = (n: number) => addDays(t, n);
@@ -130,7 +129,5 @@ export function createDevData(): {
     },
   ];
 
-  const shortcuts: Shortcut[] = [{ id: "dev-shortcut-1", name: "Gmail", url: "https://mail.google.com/", order: 0 }];
-
-  return { tasks, schedules, links, shortcuts };
+  return { tasks, schedules, links };
 }

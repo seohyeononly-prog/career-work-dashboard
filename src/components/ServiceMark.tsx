@@ -8,13 +8,18 @@ const MARK: Record<ServiceType, { label: string; cls: string }> = {
   기타: { label: "•", cls: "bg-slate-100 text-slate-600" },
 };
 
-export function ServiceMark({ service, className }: { service: ServiceType; className?: string }) {
+/** small: 사이드바처럼 좁은 곳에 쓰는 작은 크기 */
+export function ServiceMark({ service, small }: { service: ServiceType; small?: boolean }) {
   const m = MARK[service];
   return (
     <span
       title={service}
       aria-label={service}
-      className={cn("inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold", m.cls, className)}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center font-bold",
+        small ? "h-4 w-4 rounded text-[9px]" : "h-7 w-7 rounded-md text-xs",
+        m.cls,
+      )}
     >
       {m.label}
     </span>

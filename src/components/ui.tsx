@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import type { Category } from "@/lib/types";
+import type { Category, LinkCategory } from "@/lib/types";
 
 export function cn(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -11,6 +11,13 @@ export const CATEGORY_STYLE: Record<Category, { dot: string; badge: string; bar:
   취업운영: { dot: "bg-indigo-500", badge: "bg-indigo-50 text-indigo-700", bar: "bg-indigo-500" },
   일경험: { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700", bar: "bg-emerald-500" },
   기타: { dot: "bg-amber-500", badge: "bg-amber-50 text-amber-800", bar: "bg-amber-500" },
+};
+
+/** 링크 카테고리 점 색 (교육사업본부는 업무 카테고리에 없어 따로 둔다) */
+export const LINK_CATEGORY_DOT: Record<LinkCategory, string> = {
+  일경험: CATEGORY_STYLE.일경험.dot,
+  취업운영: CATEGORY_STYLE.취업운영.dot,
+  교육사업본부: "bg-sky-500",
 };
 
 export function Badge({ className, children }: { className?: string; children: ReactNode }) {

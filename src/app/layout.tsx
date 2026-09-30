@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AppShell } from "@/components/AppShell";
 import { load } from "@/lib/server/load";
-import { getDataSource, getSheetUrl, listShortcuts } from "@/lib/server/repository";
+import { getDataSource, getSheetUrl, listLinks } from "@/lib/server/repository";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,12 +15,16 @@ export const viewport: Viewport = { themeColor: "#4f46e5" };
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // 바로가기 버튼을 못 읽어도 화면은 떠야 하므로 실패하면 빈 목록으로 둔다
-  const shortcuts = await load(listShortcuts);
+  // 링크를 못 읽어도 화면은 떠야 하므로 실패하면 빈 목록으로 둔다
+  const links = await load(listLinks);
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full">
-        <AppShell source={getDataSource()} sheetUrl={getSheetUrl()} initialShortcuts={shortcuts.ok ? shortcuts.data : []}>
+        <AppShell
+          source={getDataSource()}
+          sheetUrl={getSheetUrl()}
+          initialLinks={links.ok ? links.data : []}
+        >
           {children}
         </AppShell>
       </body>
