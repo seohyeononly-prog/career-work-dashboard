@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client-api";
 import { addDays, todayStr } from "@/lib/date";
 import {
@@ -16,9 +16,12 @@ import {
   type Shortcut,
   type ShortcutInput,
   type Task,
+  companyOf,
+  withCompany,
+  withoutCompany,
 } from "@/lib/types";
 import { useToast } from "./Toast";
-import { Button, ErrorNote, Field, Modal, Select, inputCls } from "./ui";
+import { Button, ErrorNote, Field, Modal, Select, cn, inputCls } from "./ui";
 
 function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
   const [saving, setSaving] = useState(false);
@@ -163,11 +166,73 @@ function DateRangeFields({ value, onChange }: { value: DateRange; onChange: (v: 
 
 type Draft = { title: string; category: Category } & DateRange;
 
+/** 기업명 비교용: 공백·대소문자 무시 */
+const companyKey = (c: string) => c.replace(/\s/g, "").toLowerCase();
+
+/** 기업 입력칸(자동완성) + 자주 쓴 기업 버튼 */
+function CompanyField({
+  value,
+  companies,
+  onChange,
+  autoFocus,
+}: {
+  value: string;
+  companies: string[];
+  onChange: (c: string) => void;
+  autoFocus: boolean;
+}) {
+  const listId = useId();
+  const frequent = companies.slice(0, 8);
+  return (
+    <div className="space-y-1.5">
+      <Field label="기업">
+        <input
+          className={inputCls}
+          list={listId}
+          placeholder="기업명 (없으면 비워 두세요)"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoFocus={autoFocus}
+        />
+        <datalist id={listId}>
+          {companies.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </Field>
+      {frequent.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {frequent.map((c) => {
+            const on = companyKey(c) === companyKey(value);
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={on}
+                onClick={() => onChange(on ? "" : c)}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs ring-1 transition",
+                  on
+                    ? "bg-emerald-50 text-emerald-700 ring-emerald-300"
+                    : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50",
+                )}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 업무·일정 공용 입력 폼: 이름, 카테고리, 날짜(기간) */
 function ItemForm<T>({
   kind,
   initial,
   isEdit,
+  companies,
   save,
   onClose,
   onSaved,
@@ -176,29 +241,68 @@ function ItemForm<T>({
   kind: "업무" | "일정";
   initial: Draft;
   isEdit: boolean;
+  /** 있으면 일경험일 때 기업 칸을 보여 주고, 제목 앞에 '[기업] '을 붙여 저장한다 */
+  companies?: string[];
   save: (v: Draft) => Promise<T>;
   onClose: () => void;
   onSaved: (v: T) => void;
   /** 있으면 삭제 버튼을 보여준다 */
   remove?: () => Promise<void>;
 }) {
-  const [v, setV] = useState<Draft>(initial);
+  const hasCompany = (c: Category) => !!companies && c === "일경험";
+  // 일경험 일정은 제목의 '[기업]'을 기업 칸으로 떼어 낸다
+  const [company, setCompany] = useState(() => (hasCompany(initial.category) ? companyOf(initial.title) : ""));
+  const [v, setV] = useState<Draft>(() =>
+    hasCompany(initial.category) ? { ...initial, title: withoutCompany(initial.title) } : initial,
+  );
   const set = (p: Partial<Draft>) => setV((s) => ({ ...s, ...p }));
-  const { saving, error: saveError, submit } = useSubmit(() => save(v), onSaved);
+
+  /** 카테고리를 바꾸면 기업을 제목에 합치거나 제목에서 떼어 낸다 */
+  const changeCategory = (category: Category) => {
+    if (hasCompany(v.category) && !hasCompany(category)) {
+      set({ category, title: withCompany(company.trim(), v.title) });
+      setCompany("");
+    } else if (!hasCompany(v.category) && hasCompany(category)) {
+      const c = companyOf(v.title);
+      set({ category, title: c ? withoutCompany(v.title) : v.title });
+      setCompany(c);
+    } else set({ category });
+  };
+
+  /** 저장할 기업명: 대괄호를 빼고, 이미 있는 기업과 공백·대소문자만 다르면 그 이름으로 맞춘다 */
+  const savedCompany = () => {
+    const c = company.replace(/[[\]]/g, "").trim();
+    return companies?.find((x) => companyKey(x) === companyKey(c)) ?? c;
+  };
+  const { saving, error: saveError, submit } = useSubmit(
+    () => save(hasCompany(v.category) ? { ...v, title: withCompany(savedCompany(), v.title.trim()) } : v),
+    onSaved,
+  );
   const { error: deleteError, del } = useDelete(
     `'${initial.title}' ${kind}${kind === "업무" ? "를" : "을"}`,
     remove,
   );
   const error = saveError || deleteError;
+  // 새 일경험 일정인데 기업이 비어 있으면 기업 칸부터
+  const focusCompany = hasCompany(v.category) && !isEdit && !company;
 
   return (
     <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        {companies && hasCompany(v.category) && (
+          <CompanyField value={company} companies={companies} onChange={setCompany} autoFocus={focusCompany} />
+        )}
         <Field label={`${kind}명`}>
-          <input className={inputCls} value={v.title} onChange={(e) => set({ title: e.target.value })} required autoFocus />
+          <input
+            className={inputCls}
+            value={v.title}
+            onChange={(e) => set({ title: e.target.value })}
+            required
+            autoFocus={!focusCompany}
+          />
         </Field>
         <Field label="카테고리">
-          <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
+          <Select value={v.category} options={CATEGORIES} onChange={changeCategory} />
         </Field>
         <DateRangeFields value={v} onChange={set} />
         {error && <ErrorNote message={error} />}
@@ -263,6 +367,7 @@ export function ScheduleFormModal({
   defaultDate,
   defaultTitle,
   defaultCategory,
+  companies,
   onClose,
   onSaved,
   onDeleted,
@@ -272,6 +377,8 @@ export function ScheduleFormModal({
   /** 기업별 보기에서 추가할 때 '[기업] '을 미리 채운다 */
   defaultTitle?: string;
   defaultCategory?: Category;
+  /** 자동완성·버튼으로 보여 줄 기업 목록 (많이 쓴 순) */
+  companies: string[];
   onClose: () => void;
   onSaved: (s: Schedule) => void;
   onDeleted?: (id: string) => void;
@@ -280,6 +387,7 @@ export function ScheduleFormModal({
     <ItemForm
       kind="일정"
       isEdit={!!schedule}
+      companies={companies}
       initial={draftOf(schedule, { title: defaultTitle, category: defaultCategory, date: defaultDate })}
       save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
       onClose={onClose}

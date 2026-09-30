@@ -77,6 +77,22 @@ export const byLinkOrder = (a: LinkItem, b: LinkItem) =>
 /** 일정 제목 맨 앞의 '[기업]'에서 기업명을 꺼낸다. 없으면 "" */
 export const companyOf = (title: string) => title.match(/^\s*\[([^\]]+)\]/)?.[1].trim() ?? "";
 
+/** 일정 제목에서 맨 앞의 '[기업]'을 뺀 나머지 */
+export const withoutCompany = (title: string) => title.replace(/^\s*\[[^\]]*\]\s*/, "");
+
+/** 기업명과 제목을 '[기업] 제목'으로 합친다. 기업이 없으면 제목만 */
+export const withCompany = (company: string, title: string) => (company ? `[${company}] ${title}` : title);
+
+/** 일경험 일정에 쓰인 기업명. 많이 쓴 순 → 이름순 */
+export const companyNames = (schedules: Schedule[]) => {
+  const count = new Map<string, number>();
+  for (const s of schedules) {
+    const c = s.category === "일경험" ? companyOf(s.title) : "";
+    if (c) count.set(c, (count.get(c) ?? 0) + 1);
+  }
+  return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).map(([c]) => c);
+};
+
 /** 사이드바 바로가기 버튼 */
 export interface Shortcut {
   id: string;
