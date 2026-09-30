@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WEEKDAYS, diffDays, monthGrid, rangeLabel, shortDate, toUTCDate, todayStr } from "@/lib/date";
-import { CATEGORIES, companyOf, covers, rangeEnd, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, companyOf, covers, rangeEnd, withoutCompany, type Schedule, type Task } from "@/lib/types";
 import { Button, CATEGORY_STYLE, CategoryBadge, Empty, Select, cn } from "./ui";
 
 /** 업무 확인 / 일정 확인 / 기업별 일정(일경험 일정 중 '[기업]'으로 시작하는 것) */
@@ -39,6 +39,63 @@ const MODE_STYLE: Record<CalendarMode, { tab: string; add: string; frame: string
     frame: "border-t-violet-500",
     head: "bg-violet-50 text-violet-900/70",
   },
+};
+
+/** 칸 안의 일정 한 줄: 일정 하나, 또는 기업만 다른 같은 일정 묶음 */
+type CellEntry =
+  | { kind: "one"; item: Schedule }
+  | {
+      kind: "group";
+      key: string;
+      title: string;
+      category: Schedule["category"];
+      items: Schedule[];
+    };
+
+/**
+ * 이 단어가 제목에 들어 있으면 나머지가 달라도 같은 일정으로 묶는다('md | 종료'와 '2기 종료').
+ * 앞에 있는 것부터 본다: '수당 서류'가 '수당'보다 먼저.
+ */
+const GROUP_KEYWORDS = ["수당 서류", "지원자 서류", "사전직무교육", "수당", "개시", "종료", "4주차", "면접", "OJT"];
+
+/** 묶는 기준: 위 단어 중 처음 맞는 것, 없으면 '[기업]'을 뺀 제목 그대로(기업이 붙은 일정만) */
+const groupOf = (s: Schedule) => {
+  const rest = withoutCompany(s.title).trim();
+  const flat = rest.replace(/\s/g, "").toLowerCase();
+  const kw = GROUP_KEYWORDS.find((k) => flat.includes(k.replace(/\s/g, "").toLowerCase()));
+  if (kw) return { key: `${s.category}|#${kw}`, title: kw };
+  return companyOf(s.title) ? { key: `${s.category}|${rest}`, title: rest } : null;
+};
+
+/** 묶음 목록에서 일정 이름: 기업, 기업이 없으면 제목 */
+const groupLabel = (s: Schedule) => companyOf(s.title) || s.title;
+
+/** 같은 단어('종료', '면접' 등)를 가진 일정이나 기업만 다른 같은 일정은 한 줄로 묶는다 */
+const groupSchedules = (list: Schedule[]): CellEntry[] => {
+  const groups = new Map<string, Schedule[]>();
+  for (const s of list) {
+    const g = groupOf(s);
+    if (g) groups.set(g.key, [...(groups.get(g.key) ?? []), s]);
+  }
+  const out: CellEntry[] = [];
+  const done = new Set<string>();
+  for (const s of list) {
+    const info = groupOf(s);
+    const g = info && groups.get(info.key);
+    if (!info || !g || g.length < 2) out.push({ kind: "one", item: s });
+    else if (!done.has(info.key)) {
+      done.add(info.key);
+      const items = [...g].sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), "ko"));
+      out.push({
+        kind: "group",
+        key: info.key,
+        title: info.title,
+        category: s.category,
+        items,
+      });
+    }
+  }
+  return out;
 };
 
 type DragItem = { kind: "task"; item: Task; from: string } | { kind: "schedule"; item: Schedule; from: string };
@@ -95,6 +152,26 @@ export function CalendarPanel({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [overDay, setOverDay] = useState<string | null>(null);
+  /** 열어 둔 기업 묶음: 누른 버튼 아래에 기업 목록을 띄운다 */
+  const [groupPop, setGroupPop] = useState<{
+    items: Schedule[];
+    title: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!groupPop) return;
+    const close = () => setGroupPop(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [groupPop]);
   const days = monthGrid(year, month);
   // 일정 캘린더(일정 확인·기업별)는 평일만, 업무 확인은 주말까지 보여 준다
   const weekdaysOnly = mode !== "task";
@@ -119,8 +196,7 @@ export function CalendarPanel({
   const schedulesOn = (d: string) =>
     visibleSchedules.filter((s) => covers(s, d)).sort((a, b) => a.startDate.localeCompare(b.startDate));
   /** 기업을 하나 골랐으면 제목의 '[기업]'은 빼고 보여 준다 */
-  const scheduleTitle = (s: Schedule) =>
-    mode === "company" && company ? s.title.replace(/^\s*\[[^\]]*\]\s*/, "") || s.title : s.title;
+  const scheduleTitle = (s: Schedule) => (mode === "company" && company ? withoutCompany(s.title) || s.title : s.title);
 
   const dropOn = (d: string) => {
     const moving = drag;
@@ -225,8 +301,16 @@ export function CalendarPanel({
           {cells.map((d, i) => {
             const inMonth = d.startsWith(monthPrefix);
             const items = mode === "task" ? tasksOn(d) : schedulesOn(d);
+            // 일정 캘린더: 기업만 다른 같은 일정은 한 줄로 (기업을 하나 골랐으면 묶지 않는다)
+            const entries: CellEntry[] =
+              mode === "task"
+                ? []
+                : mode === "company" && company
+                  ? (items as Schedule[]).map((item) => ({ kind: "one", item }))
+                  : groupSchedules(items as Schedule[]);
+            const lines = mode === "task" ? items.length : entries.length;
             const open = expanded === d;
-            const shown = open ? items.length : MAX_IN_CELL;
+            const shown = open ? lines : MAX_IN_CELL;
             return (
               <div
                 key={d}
@@ -329,25 +413,61 @@ export function CalendarPanel({
                           </button>
                         </li>
                       ))
-                    : (items as Schedule[]).slice(0, shown).map((s) => (
-                        <li key={s.id}>
-                          <button
-                            {...dragProps({ kind: "schedule", item: s, from: d })}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenSchedule(s);
-                            }}
-                            className={cn(
-                              "flex w-full cursor-grab items-center truncate rounded px-1 py-0.5 text-left text-[11px] hover:opacity-80 active:cursor-grabbing",
-                              drag?.item.id === s.id && "opacity-40",
-                              CATEGORY_STYLE[s.category].badge,
-                            )}
-                          >
-                            <span className="truncate">{scheduleTitle(s)}</span>
-                          </button>
-                        </li>
-                      ))}
-                  {items.length > MAX_IN_CELL && (
+                    : entries.slice(0, shown).map((en) => {
+                        if (en.kind === "group")
+                          return (
+                            <li key={en.key}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelect(d);
+                                  const r = e.currentTarget.getBoundingClientRect();
+                                  setGroupPop({
+                                    items: en.items,
+                                    title: en.title,
+                                    top: r.bottom + 4,
+                                    left: Math.max(8, Math.min(r.left, window.innerWidth - 248)),
+                                  });
+                                }}
+                                aria-haspopup="dialog"
+                                title={en.items.map(groupLabel).join(", ")}
+                                className={cn(
+                                  "flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[11px] hover:opacity-80",
+                                  CATEGORY_STYLE[en.category].badge,
+                                )}
+                              >
+                                <span className="truncate">{en.title}</span>
+                                <span className="ml-auto shrink-0 rounded-full bg-white/70 px-1 text-[10px] font-semibold">
+                                  +{en.items.length}개
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        const s = en.item;
+                        return (
+                          <li key={s.id}>
+                            <button
+                              {...dragProps({
+                                kind: "schedule",
+                                item: s,
+                                from: d,
+                              })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenSchedule(s);
+                              }}
+                              className={cn(
+                                "flex w-full cursor-grab items-center truncate rounded px-1 py-0.5 text-left text-[11px] hover:opacity-80 active:cursor-grabbing",
+                                drag?.item.id === s.id && "opacity-40",
+                                CATEGORY_STYLE[s.category].badge,
+                              )}
+                            >
+                              <span className="truncate">{scheduleTitle(s)}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                  {lines > MAX_IN_CELL && (
                     <li>
                       {/* 날짜 선택도 같이 되도록 클릭은 칸까지 전달한다 */}
                       <button
@@ -355,7 +475,7 @@ export function CalendarPanel({
                         aria-expanded={open}
                         className="w-full rounded px-1 py-0.5 text-left text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                       >
-                        {open ? "접기" : `+${items.length - MAX_IN_CELL}개 더보기`}
+                        {open ? "접기" : `+${lines - MAX_IN_CELL}개 더보기`}
                       </button>
                     </li>
                   )}
@@ -365,6 +485,45 @@ export function CalendarPanel({
           })}
         </div>
       </div>
+
+      {/* 기업만 다른 일정 묶음의 기업 목록. 기업을 누르면 그 일정을 연다 */}
+      {groupPop && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setGroupPop(null)} aria-hidden />
+          <div
+            role="dialog"
+            aria-label={`${groupPop.title} 기업 목록`}
+            style={{ top: groupPop.top, left: groupPop.left }}
+            className="fixed z-50 max-h-72 w-60 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          >
+            <p className="truncate border-b border-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+              {groupPop.title} <span className="font-normal text-slate-500">{groupPop.items.length}개</span>
+            </p>
+            <ul>
+              {groupPop.items.map((s) => (
+                <li key={s.id}>
+                  <button
+                    onClick={() => {
+                      setGroupPop(null);
+                      onOpenSchedule(s);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                  >
+                    {/* 묶인 일정끼리 제목이 다를 수 있어 기업 옆에 나머지 제목도 보여 준다 */}
+                    <span className="min-w-0 flex-1 truncate">
+                      {groupLabel(s)}
+                      {companyOf(s.title) && (
+                        <span className="ml-1.5 text-xs text-slate-500">{withoutCompany(s.title)}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs text-slate-500">{rangeLabel(s)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
 
       {/* 선택한 날짜: 업무·일정 추가, 일정 캘린더에서는 그날 일정 목록까지 */}
       <div className="mt-3 rounded-lg border border-slate-200 bg-white">
