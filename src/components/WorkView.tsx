@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { api, upsert } from "@/lib/client-api";
 import { addDays, fullDate, shortDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, TASK_STATUSES, byOrder, companyNames, covers, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
+import { CATEGORIES, TASK_STATUSES, byOrder, companyNames, covers, scheduleTitles, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
 import { ALL_COMPANIES, CalendarPanel, type CalendarMode } from "./CalendarPanel";
 import { ScheduleFormModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
@@ -371,6 +371,7 @@ export function WorkView({
           defaultTitle={modal.title}
           defaultCategory={modal.category}
           companies={companyNames(schedules)}
+          titles={scheduleTitles(schedules)}
           onClose={() => setModal(null)}
           onSaved={(s) => {
             setSchedules((l) => upsert(l, s));

@@ -93,6 +93,22 @@ export const companyNames = (schedules: Schedule[]) => {
   return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).map(([c]) => c);
 };
 
+/**
+ * 일정 이름으로 자주 쓰는 단어. 일정 입력의 이름 버튼이 되고,
+ * 캘린더에서는 이 단어가 들어간 일정끼리 묶는다. 앞에 있는 것부터 본다: '수당 서류'가 '수당'보다 먼저.
+ */
+export const SCHEDULE_KEYWORDS = ["수당 서류", "지원자 서류", "사전직무교육", "수당", "개시", "종료", "4주차", "면접", "OJT"];
+
+/** 일정 이름('[기업]' 뺀 제목). 많이 쓴 순 → 이름순 */
+export const scheduleTitles = (schedules: Schedule[]) => {
+  const count = new Map<string, number>();
+  for (const s of schedules) {
+    const t = withoutCompany(s.title).trim();
+    if (t) count.set(t, (count.get(t) ?? 0) + 1);
+  }
+  return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).map(([t]) => t);
+};
+
 /** 사이드바 바로가기 버튼 */
 export interface Shortcut {
   id: string;

@@ -6,6 +6,7 @@ import { addDays, todayStr } from "@/lib/date";
 import {
   CATEGORIES,
   LINK_CATEGORIES,
+  SCHEDULE_KEYWORDS,
   SERVICE_TYPES,
   type Category,
   type LinkCategory,
@@ -169,40 +170,50 @@ type Draft = { title: string; category: Category } & DateRange;
 /** 기업명 비교용: 공백·대소문자 무시 */
 const companyKey = (c: string) => c.replace(/\s/g, "").toLowerCase();
 
-/** 기업 입력칸(자동완성) + 자주 쓴 기업 버튼 */
-function CompanyField({
+/** 입력칸(자동완성) + 골라 넣는 버튼. 기업·일정 이름에 쓴다 */
+function PickField({
+  label,
+  placeholder,
   value,
-  companies,
+  options,
+  chips,
   onChange,
   autoFocus,
+  required,
 }: {
+  label: string;
+  placeholder?: string;
   value: string;
-  companies: string[];
+  /** 자동완성 목록 */
+  options: string[];
+  /** 버튼으로 보여 줄 값. 누른 버튼을 다시 누르면 비운다 */
+  chips: string[];
   onChange: (c: string) => void;
   autoFocus: boolean;
+  required?: boolean;
 }) {
   const listId = useId();
-  const frequent = companies.slice(0, 8);
   return (
     <div className="space-y-1.5">
-      <Field label="기업">
+      <Field label={label}>
         <input
           className={inputCls}
           list={listId}
-          placeholder="기업명 (없으면 비워 두세요)"
+          placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoFocus={autoFocus}
+          required={required}
         />
         <datalist id={listId}>
-          {companies.map((c) => (
+          {options.map((c) => (
             <option key={c} value={c} />
           ))}
         </datalist>
       </Field>
-      {frequent.length > 0 && (
+      {chips.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {frequent.map((c) => {
+          {chips.map((c) => {
             const on = companyKey(c) === companyKey(value);
             return (
               <button
@@ -233,6 +244,7 @@ function ItemForm<T>({
   initial,
   isEdit,
   companies,
+  titles,
   save,
   onClose,
   onSaved,
@@ -243,6 +255,8 @@ function ItemForm<T>({
   isEdit: boolean;
   /** 있으면 일경험일 때 기업 칸을 보여 주고, 제목 앞에 '[기업] '을 붙여 저장한다 */
   companies?: string[];
+  /** 있으면 이름 칸에 자동완성과 자주 쓰는 이름 버튼을 붙인다 */
+  titles?: string[];
   save: (v: Draft) => Promise<T>;
   onClose: () => void;
   onSaved: (v: T) => void;
@@ -290,17 +304,37 @@ function ItemForm<T>({
     <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         {companies && hasCompany(v.category) && (
-          <CompanyField value={company} companies={companies} onChange={setCompany} autoFocus={focusCompany} />
-        )}
-        <Field label={`${kind}명`}>
-          <input
-            className={inputCls}
-            value={v.title}
-            onChange={(e) => set({ title: e.target.value })}
-            required
-            autoFocus={!focusCompany}
+          <PickField
+            label="기업"
+            placeholder="기업명 (없으면 비워 두세요)"
+            value={company}
+            options={companies}
+            chips={companies.slice(0, 8)}
+            onChange={setCompany}
+            autoFocus={focusCompany}
           />
-        </Field>
+        )}
+        {titles ? (
+          <PickField
+            label={`${kind}명`}
+            value={v.title}
+            options={titles}
+            chips={SCHEDULE_KEYWORDS}
+            onChange={(title) => set({ title })}
+            autoFocus={!focusCompany}
+            required
+          />
+        ) : (
+          <Field label={`${kind}명`}>
+            <input
+              className={inputCls}
+              value={v.title}
+              onChange={(e) => set({ title: e.target.value })}
+              required
+              autoFocus={!focusCompany}
+            />
+          </Field>
+        )}
         <Field label="카테고리">
           <Select value={v.category} options={CATEGORIES} onChange={changeCategory} />
         </Field>
@@ -368,6 +402,7 @@ export function ScheduleFormModal({
   defaultTitle,
   defaultCategory,
   companies,
+  titles,
   onClose,
   onSaved,
   onDeleted,
@@ -379,6 +414,8 @@ export function ScheduleFormModal({
   defaultCategory?: Category;
   /** 자동완성·버튼으로 보여 줄 기업 목록 (많이 쓴 순) */
   companies: string[];
+  /** 자동완성으로 보여 줄 일정 이름 ('[기업]' 뺀 제목, 많이 쓴 순) */
+  titles: string[];
   onClose: () => void;
   onSaved: (s: Schedule) => void;
   onDeleted?: (id: string) => void;
@@ -388,6 +425,7 @@ export function ScheduleFormModal({
       kind="일정"
       isEdit={!!schedule}
       companies={companies}
+      titles={titles}
       initial={draftOf(schedule, { title: defaultTitle, category: defaultCategory, date: defaultDate })}
       save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
       onClose={onClose}

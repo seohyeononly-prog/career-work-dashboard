@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { WEEKDAYS, diffDays, monthGrid, rangeLabel, shortDate, toUTCDate, todayStr } from "@/lib/date";
-import { CATEGORIES, companyOf, covers, rangeEnd, withoutCompany, type Schedule, type Task } from "@/lib/types";
+import {
+  CATEGORIES,
+  SCHEDULE_KEYWORDS,
+  companyOf,
+  covers,
+  rangeEnd,
+  withoutCompany,
+  type Schedule,
+  type Task,
+} from "@/lib/types";
 import { Button, CATEGORY_STYLE, CategoryBadge, Empty, Select, cn } from "./ui";
 
 /** 업무 확인 / 일정 확인 / 기업별 일정(일경험 일정 중 '[기업]'으로 시작하는 것) */
@@ -53,16 +62,13 @@ type CellEntry =
     };
 
 /**
- * 이 단어가 제목에 들어 있으면 나머지가 달라도 같은 일정으로 묶는다('md | 종료'와 '2기 종료').
- * 앞에 있는 것부터 본다: '수당 서류'가 '수당'보다 먼저.
+ * 묶는 기준: SCHEDULE_KEYWORDS 중 제목에 처음 맞는 단어('md | 종료'와 '2기 종료'는 같이),
+ * 없으면 '[기업]'을 뺀 제목 그대로(기업이 붙은 일정만)
  */
-const GROUP_KEYWORDS = ["수당 서류", "지원자 서류", "사전직무교육", "수당", "개시", "종료", "4주차", "면접", "OJT"];
-
-/** 묶는 기준: 위 단어 중 처음 맞는 것, 없으면 '[기업]'을 뺀 제목 그대로(기업이 붙은 일정만) */
 const groupOf = (s: Schedule) => {
   const rest = withoutCompany(s.title).trim();
   const flat = rest.replace(/\s/g, "").toLowerCase();
-  const kw = GROUP_KEYWORDS.find((k) => flat.includes(k.replace(/\s/g, "").toLowerCase()));
+  const kw = SCHEDULE_KEYWORDS.find((k) => flat.includes(k.replace(/\s/g, "").toLowerCase()));
   if (kw) return { key: `${s.category}|#${kw}`, title: kw };
   return companyOf(s.title) ? { key: `${s.category}|${rest}`, title: rest } : null;
 };
