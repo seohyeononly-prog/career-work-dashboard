@@ -23,11 +23,18 @@ export interface DateRange {
   endDate: string;
 }
 
+/** 업무 안의 체크리스트 한 줄 (예: 같은 업무를 여러 기업에 할 때 기업 하나) */
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+}
+
 export interface Task extends DateRange {
   id: string;
   title: string;
   category: Category;
   status: TaskStatus;
+  checklist: ChecklistItem[];
   /** 칸반 순서(작을수록 위). 새 업무는 음수로 맨 위, 0이면 아직 정하지 않은 것(맨 뒤) */
   order: number;
   createdAt: string; // YYYY-MM-DD HH:mm
@@ -69,6 +76,10 @@ export const byOrder = (a: Task, b: Task) =>
   (a.order || Infinity) - (b.order || Infinity) ||
   a.startDate.localeCompare(b.startDate) ||
   a.title.localeCompare(b.title, "ko");
+
+/** 체크리스트를 다 채웠는지에 따른 업무 상태. 체크리스트가 없으면 null(상태를 건드리지 않음) */
+export const statusOfChecklist = (list: ChecklistItem[]): TaskStatus | null =>
+  list.length ? (list.every((c) => c.done) ? "완료" : "대기") : null;
 
 /** 링크 표시 순서: 드래그로 정한 순서 → 링크명 */
 export const byLinkOrder = (a: LinkItem, b: LinkItem) =>

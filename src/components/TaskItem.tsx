@@ -33,15 +33,70 @@ export function CompleteCheckbox({
   );
 }
 
+export type ToggleItem = (t: Task, index: number, done: boolean) => void;
+
+/** 체크리스트 진행률 (예: 2/5). 체크리스트가 없으면 아무것도 안 보인다 */
+export function ChecklistBadge({ task }: { task: Task }) {
+  const total = task.checklist.length;
+  if (!total) return null;
+  const done = task.checklist.filter((c) => c.done).length;
+  return (
+    <Badge className={done === total ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}>
+      {done}/{total}
+    </Badge>
+  );
+}
+
+/** 카드·목록에서 바로 체크하는 체크리스트. 누르면 업무 창이 열리지 않고 체크만 바뀐다 */
+export function ChecklistChecks({
+  task,
+  onToggleItem,
+  disabled,
+}: {
+  task: Task;
+  onToggleItem: ToggleItem;
+  disabled?: boolean;
+}) {
+  if (!task.checklist.length) return null;
+  return (
+    <ul className="mt-1.5 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+      {task.checklist.map((c, i) => (
+        <li key={i}>
+          <label
+            className={cn(
+              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition",
+              c.done
+                ? "bg-emerald-50 text-emerald-700 line-through ring-emerald-200"
+                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+              disabled && "cursor-wait",
+            )}
+          >
+            <input
+              type="checkbox"
+              className="h-3 w-3 accent-emerald-600"
+              checked={c.done}
+              disabled={disabled}
+              onChange={(e) => onToggleItem(task, i, e.target.checked)}
+            />
+            {c.text}
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** 칸반 카드 */
 export function TaskCard({
   task,
   onToggle,
+  onToggleItem,
   onOpen,
   busy,
 }: {
   task: Task;
   onToggle: (t: Task, done: boolean) => void;
+  onToggleItem: ToggleItem;
   onOpen: (t: Task) => void;
   busy?: boolean;
 }) {
@@ -60,9 +115,11 @@ export function TaskCard({
           <h3 className={cn("text-sm font-medium break-words", done && "text-slate-400 line-through")}>{task.title}</h3>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             <CategoryBadge c={task.category} />
+            <ChecklistBadge task={task} />
             <DueBadge task={task} />
             {task.endDate && <span className="text-[11px] text-slate-500">{rangeLabel(task)}</span>}
           </div>
+          <ChecklistChecks task={task} onToggleItem={onToggleItem} disabled={busy} />
         </div>
       </div>
     </article>

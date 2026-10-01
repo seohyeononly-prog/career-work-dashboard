@@ -31,6 +31,7 @@ export function createDevData(): {
     startDate: d(startOffset),
     endDate: endOffset === undefined ? "" : d(endOffset),
     order: 0,
+    checklist: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -47,6 +48,13 @@ export function createDevData(): {
     task(9, "일경험 프로젝트 중간 점검", "일경험", "대기", 4),
     task(10, "참여자 만족도 조사 리마인드", "일경험", "완료", 0),
     task(11, "기업 멘토링 일정 확정", "일경험", "대기", 6),
+    {
+      ...task(12, "면접평가표 세팅", "일경험", "대기", 1),
+      checklist: [
+        { text: "한빛소프트", done: true },
+        { text: "그린랩스", done: false },
+      ],
+    },
   ];
 
   const sch = (

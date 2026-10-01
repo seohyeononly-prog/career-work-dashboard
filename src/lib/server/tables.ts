@@ -46,12 +46,36 @@ function readRange(start: string | undefined, end: string | undefined): DateRang
   return { startDate, endDate: endDate > startDate ? endDate : "" };
 }
 
+/** 체크리스트 칸: 한 줄에 하나씩 '[x] 기업A' / '[ ] 기업B'. 시트에서 직접 고치기 쉽게 글로 저장한다 */
+const checklistToCell = (list: Task["checklist"]) => list.map((c) => `[${c.done ? "x" : " "}] ${c.text}`).join("\n");
+
+function checklistFromCell(v: string | undefined): Task["checklist"] {
+  return (v ?? "")
+    .split(/\r?\n/)
+    .map((line) => {
+      const m = line.match(/^\s*\[(.?)\]\s*(.*)$/);
+      return m ? { text: m[2].trim(), done: m[1].trim() !== "" } : { text: line.trim(), done: false };
+    })
+    .filter((c) => c.text);
+}
+
 const truthy = (v: string | undefined) => /^(true|y|yes|1|o|예)$/i.test((v ?? "").trim());
 
 export const TasksTable: TableDef<Task> = {
   sheet: "Tasks",
-  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서"],
-  toRow: (t) => [t.id, t.title, t.category, t.status, t.startDate, t.endDate, t.createdAt, t.updatedAt, t.order ? String(t.order) : ""],
+  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서", "체크리스트"],
+  toRow: (t) => [
+    t.id,
+    t.title,
+    t.category,
+    t.status,
+    t.startDate,
+    t.endDate,
+    t.createdAt,
+    t.updatedAt,
+    t.order ? String(t.order) : "",
+    checklistToCell(t.checklist),
+  ],
   fromRow: (r) =>
     r[0]?.trim()
       ? {
@@ -63,6 +87,7 @@ export const TasksTable: TableDef<Task> = {
           createdAt: normDateTime(r[6]),
           updatedAt: normDateTime(r[7]),
           order: Number(r[8]) || 0,
+          checklist: checklistFromCell(r[9]),
         }
       : null,
 };

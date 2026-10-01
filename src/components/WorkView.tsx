@@ -76,7 +76,7 @@ export function WorkView({
   initialMode: CalendarMode;
 }) {
   const today = todayStr();
-  const { tasks, busyId, error, toggle, save, remove, reorder } = useTasks(initialTasks);
+  const { tasks, busyId, error, toggle, toggleItem, save, remove, reorder } = useTasks(initialTasks);
   const [schedules, setSchedules] = useState(initialSchedules);
   const [date, setDate] = useState(today);
   const [ym, setYm] = useState(ymOf(today));
@@ -313,6 +313,7 @@ export function WorkView({
                           task={t}
                           busy={busyId === t.id}
                           onToggle={toggle}
+                          onToggleItem={toggleItem}
                           onOpen={(task) => setModal({ kind: "task", task })}
                         />
                       </div>
@@ -353,6 +354,7 @@ export function WorkView({
           task={modal.task}
           defaultDate={modal.date}
           defaultCategory={category === "전체" ? undefined : category}
+          companies={companyNames(schedules)}
           onClose={() => setModal(null)}
           onSaved={(t) => {
             save(t);

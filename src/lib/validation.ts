@@ -24,6 +24,14 @@ export const taskInputSchema = z
     title: text(200).min(1, "업무명을 입력해 주세요."),
     category,
     status: z.enum(TASK_STATUSES, { message: "상태는 대기 또는 완료만 가능합니다." }).default("대기"),
+    // 시트에는 한 줄에 하나씩 저장하므로 항목 안의 줄바꿈은 공백으로 바꾼다
+    checklist: z
+      .array(z.object({ text: z.string().transform((s) => s.replace(/\s+/g, " ")).pipe(text(100)), done: z.boolean() }), {
+        message: "체크리스트 형식이 올바르지 않습니다.",
+      })
+      .max(50, "체크리스트는 50개까지 만들 수 있습니다.")
+      .transform((l) => l.filter((c) => c.text))
+      .default([]),
     ...dateRange,
   })
   .refine(endNotBeforeStart, endMessage)
