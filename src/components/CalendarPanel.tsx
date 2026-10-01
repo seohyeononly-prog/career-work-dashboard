@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WEEKDAYS, diffDays, monthGrid, rangeLabel, shortDate, toUTCDate, todayStr } from "@/lib/date";
 import {
   CATEGORIES,
@@ -165,16 +165,22 @@ export function CalendarPanel({
     top: number;
     left: number;
   } | null>(null);
+  const groupPopRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!groupPop) return;
     const close = () => setGroupPop(null);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    // 팝업 안 기업 목록을 스크롤할 때는 닫지 않는다
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Node && groupPopRef.current?.contains(e.target)) return;
+      close();
+    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", close);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", close);
     };
   }, [groupPop]);
@@ -227,7 +233,12 @@ export function CalendarPanel({
     },
   });
 
+  /** 일정 캘린더: 기업만 다른 같은 일정은 한 줄로 (기업을 하나 골랐으면 묶지 않는다) */
+  const entriesOf = (list: Schedule[]): CellEntry[] =>
+    mode === "company" && company ? list.map((item) => ({ kind: "one", item })) : groupSchedules(list);
+
   const selectedSchedules = schedulesOn(selected);
+  const selectedEntries = entriesOf(selectedSchedules);
 
   return (
     <section aria-label="캘린더" className="min-w-0">
@@ -307,13 +318,7 @@ export function CalendarPanel({
           {cells.map((d, i) => {
             const inMonth = d.startsWith(monthPrefix);
             const items = mode === "task" ? tasksOn(d) : schedulesOn(d);
-            // 일정 캘린더: 기업만 다른 같은 일정은 한 줄로 (기업을 하나 골랐으면 묶지 않는다)
-            const entries: CellEntry[] =
-              mode === "task"
-                ? []
-                : mode === "company" && company
-                  ? (items as Schedule[]).map((item) => ({ kind: "one", item }))
-                  : groupSchedules(items as Schedule[]);
+            const entries = mode === "task" ? [] : entriesOf(items as Schedule[]);
             const lines = mode === "task" ? items.length : entries.length;
             const open = expanded === d;
             const shown = open ? lines : MAX_IN_CELL;
@@ -497,10 +502,11 @@ export function CalendarPanel({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setGroupPop(null)} aria-hidden />
           <div
+            ref={groupPopRef}
             role="dialog"
             aria-label={`${groupPop.title} 기업 목록`}
             style={{ top: groupPop.top, left: groupPop.left }}
-            className="fixed z-50 max-h-72 w-60 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+            className="fixed z-50 max-h-72 w-60 overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
           >
             <p className="truncate border-b border-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
               {groupPop.title} <span className="font-normal text-slate-500">{groupPop.items.length}개</span>
@@ -553,18 +559,51 @@ export function CalendarPanel({
         {mode !== "task" &&
           (selectedSchedules.length ? (
             <ul className="divide-y divide-slate-100">
-              {selectedSchedules.map((s) => (
-                <li key={s.id}>
-                  <button
-                    onClick={() => onOpenSchedule(s)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
-                  >
-                    <CategoryBadge c={s.category} />
-                    <span className="min-w-0 flex-1 truncate text-sm">{s.title}</span>
-                    <span className="shrink-0 text-xs text-slate-500">{rangeLabel(s)}</span>
-                  </button>
-                </li>
-              ))}
+              {selectedEntries.map((en) =>
+                en.kind === "one" ? (
+                  <li key={en.item.id}>
+                    <button
+                      onClick={() => onOpenSchedule(en.item)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <CategoryBadge c={en.item.category} />
+                      <span className="min-w-0 flex-1 truncate text-sm">{en.item.title}</span>
+                      <span className="shrink-0 text-xs text-slate-500">{rangeLabel(en.item)}</span>
+                    </button>
+                  </li>
+                ) : (
+                  // 캘린더 칩과 같은 묶음: 제목 한 줄 아래에 기업별 일정
+                  <li key={en.key} className="py-1.5">
+                    <div className="flex items-center gap-2 px-3 py-1">
+                      <CategoryBadge c={en.category} />
+                      <span
+                        className={cn("rounded px-1.5 py-0.5 text-sm font-semibold", CATEGORY_STYLE[en.category].badge)}
+                      >
+                        {en.title}
+                      </span>
+                      <span className="text-xs text-slate-500">{en.items.length}개</span>
+                    </div>
+                    <ul>
+                      {en.items.map((s) => (
+                        <li key={s.id}>
+                          <button
+                            onClick={() => onOpenSchedule(s)}
+                            className="flex w-full items-center gap-2 py-1.5 pr-3 pl-8 text-left hover:bg-slate-50"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                              {groupLabel(s)}
+                              {companyOf(s.title) && (
+                                <span className="ml-1.5 text-xs text-slate-500">{withoutCompany(s.title)}</span>
+                              )}
+                            </span>
+                            <span className="shrink-0 text-xs text-slate-500">{rangeLabel(s)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ),
+              )}
             </ul>
           ) : (
             <div className="p-4">
