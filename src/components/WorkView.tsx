@@ -76,16 +76,21 @@ export function WorkView({
   initialMode: CalendarMode;
 }) {
   const today = todayStr();
-  const { tasks, busyId, error, toggle, toggleItem, save, remove, reorder } = useTasks(initialTasks);
+  const { tasks, busyId, error, toggle, toggleItem, save, remove, reorder, moveTo } = useTasks(initialTasks);
   const [schedules, setSchedules] = useState(initialSchedules);
+  /** 칸반보드 날짜와 캘린더에서 고른 날짜는 따로 움직인다 */
   const [date, setDate] = useState(today);
+  const [calDate, setCalDate] = useState(today);
   const [ym, setYm] = useState(ymOf(today));
   const [mode, setModeState] = useState<CalendarMode>(initialMode);
   const [category, setCategory] = useState<Category | All>("전체");
   const [status, setStatus] = useState<TaskStatus | All>("전체");
   const [modal, setModal] = useState<Modal>(null);
   const toast = useToast();
-  const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean } } | null>(null);
+  /** 끄는 카드와 놓을 자리: 카드 앞/뒤(over) 또는 열의 빈 곳(overCol, 그 열 맨 아래) */
+  const [drag, setDrag] = useState<{ id: string; over?: { id: string; after: boolean }; overCol?: TaskStatus } | null>(
+    null,
+  );
   /** 기업별 일정 보기에서 고른 기업 ("" = 기업 전체) */
   const [company, setCompany] = useState(ALL_COMPANIES);
 
@@ -101,10 +106,14 @@ export function WorkView({
     } catch {}
   };
 
-  /** 날짜를 고르면 칸반보드가 바뀌고, 캘린더도 그 달로 이동한다 */
+  /** 칸반보드 날짜만 바꾼다 (캘린더는 그대로) */
   const selectDate = (d: string) => {
+    if (d) setDate(d);
+  };
+  /** 캘린더에서 날짜를 고르면 캘린더만 그 날짜·그 달로 (칸반보드는 그대로) */
+  const selectCalDate = (d: string) => {
     if (!d) return;
-    setDate(d);
+    setCalDate(d);
     setYm(ymOf(d));
   };
   const moveMonth = (delta: number) =>
@@ -162,16 +171,21 @@ export function WorkView({
   const dayTasks = allDayTasks.filter((t) => category === "전체" || t.category === category);
   const columns = status === "전체" ? TASK_STATUSES : [status];
 
-  /** 끌던 카드를 같은 열의 대상 카드 앞/뒤로 옮기고, 그날 업무 전체에 순서를 다시 매긴다 */
-  const dropOn = (target: Task, after: boolean) => {
+  /**
+   * 끌던 카드를 대상 카드 앞/뒤(target) 또는 열 맨 아래(target 없음)로 옮기고, 그날 업무 전체에 순서를 다시 매긴다.
+   * 다른 열이면 상태(대기·완료)도 바꾼다.
+   */
+  const dropOn = (col: TaskStatus, target?: { id: string; after: boolean }) => {
     const moving = allDayTasks.find((t) => t.id === drag?.id);
     setDrag(null);
-    if (!moving || moving.id === target.id || moving.status !== target.status) return;
+    if (!moving || moving.id === target?.id) return;
     const rest = allDayTasks.filter((t) => t.id !== moving.id);
-    const at = rest.findIndex((t) => t.id === target.id) + (after ? 1 : 0);
+    const at = target
+      ? rest.findIndex((t) => t.id === target.id) + (target.after ? 1 : 0)
+      : rest.findLastIndex((t) => t.status === col) + 1 || rest.length;
     const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
-    if (next.every((t, i) => t.id === allDayTasks[i].id && t.order === i + 1)) return;
-    reorder(next.map((t) => t.id));
+    if (moving.status !== col) moveTo(moving, col, next.map((t) => t.id));
+    else if (!next.every((t, i) => t.id === allDayTasks[i].id && t.order === i + 1)) reorder(next.map((t) => t.id));
   };
 
   /** 선택한 날짜의 업무 전체를 칸반 순서대로 한 줄씩 복사한다 */
@@ -270,9 +284,19 @@ export function WorkView({
               <section
                 key={col}
                 aria-label={`${col} 열`}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  if (drag.overCol !== col) setDrag({ id: drag.id, overCol: col });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (drag?.overCol === col) dropOn(col);
+                }}
                 className={cn(
-                  "flex min-h-40 min-w-0 flex-col rounded-lg border border-t-4 border-slate-200 bg-slate-100/60",
+                  "flex min-h-40 min-w-0 flex-col rounded-lg border border-t-4 border-slate-200 bg-slate-100/60 transition",
                   COLUMN_STYLE[col],
+                  drag?.overCol === col && "bg-indigo-50 ring-2 ring-indigo-300",
                 )}
               >
                 <header className="flex items-center justify-between px-2.5 py-2">
@@ -292,16 +316,22 @@ export function WorkView({
                         }}
                         onDragEnd={() => setDrag(null)}
                         onDragOver={(e) => {
-                          const moving = drag && tasks.find((x) => x.id === drag.id);
-                          if (!moving || moving.id === t.id || moving.status !== t.status) return;
+                          // 카드 위에서는 열(빈 곳) 처리로 넘기지 않는다
+                          e.stopPropagation();
+                          if (!drag) return;
+                          if (drag.id === t.id) {
+                            if (drag.over || drag.overCol) setDrag({ id: drag.id });
+                            return;
+                          }
                           e.preventDefault();
                           const r = e.currentTarget.getBoundingClientRect();
                           const after = e.clientY > r.top + r.height / 2;
-                          if (over?.after !== after) setDrag({ id: moving.id, over: { id: t.id, after } });
+                          if (over?.after !== after) setDrag({ id: drag.id, over: { id: t.id, after } });
                         }}
                         onDrop={(e) => {
                           e.preventDefault();
-                          if (over) dropOn(t, over.after);
+                          e.stopPropagation();
+                          if (over) dropOn(col, over);
                         }}
                         className={cn(
                           "-my-0.5 border-y-2 border-transparent py-px",
@@ -338,9 +368,9 @@ export function WorkView({
         year={ym.y}
         month={ym.m}
         onMove={moveMonth}
-        onToday={() => selectDate(today)}
-        selected={date}
-        onSelect={selectDate}
+        onToday={() => selectCalDate(today)}
+        selected={calDate}
+        onSelect={selectCalDate}
         onOpenTask={(task) => setModal({ kind: "task", task })}
         onOpenSchedule={(schedule) => setModal({ kind: "schedule", schedule })}
         onAdd={addSchedule}
