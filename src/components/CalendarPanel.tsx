@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { WEEKDAYS, diffDays, monthGrid, rangeLabel, shortDate, toUTCDate, todayStr } from "@/lib/date";
 import {
   CATEGORIES,
@@ -31,19 +31,19 @@ const MODES = [
 /** 탭마다 캘린더 색을 조금씩 다르게: 활성 탭, 추가 버튼, 캘린더 윗선, 요일 줄 */
 const MODE_STYLE: Record<CalendarMode, { tab: string; add: string; frame: string; head: string }> = {
   task: {
-    tab: "bg-indigo-600 text-white",
+    tab: "bg-indigo-100 text-indigo-800",
     add: "",
     frame: "border-t-indigo-500",
     head: "bg-indigo-50/70 text-indigo-900/70",
   },
   schedule: {
-    tab: "bg-sky-600 text-white",
+    tab: "bg-sky-100 text-sky-800",
     add: "bg-sky-600! hover:bg-sky-700!",
     frame: "border-t-sky-500",
     head: "bg-sky-50 text-sky-900/70",
   },
   company: {
-    tab: "bg-violet-600 text-white",
+    tab: "bg-violet-100 text-violet-800",
     add: "bg-violet-600! hover:bg-violet-700!",
     frame: "border-t-violet-500",
     head: "bg-violet-50 text-violet-900/70",
@@ -105,6 +105,17 @@ const groupSchedules = (list: Schedule[]): CellEntry[] => {
 };
 
 type DragItem = { kind: "task"; item: Task; from: string } | { kind: "schedule"; item: Schedule; from: string };
+
+/** 일정 캘린더에서 주말도 보여 줄지 (localStorage, 켜면 "1") */
+const WEEKEND_KEY = "calendar-show-weekend";
+const noSubscribe = () => () => {};
+function readShowWeekend() {
+  try {
+    return localStorage.getItem(WEEKEND_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** 기업별 보기에서 보여 줄 일정인지 */
 export const matchesCompany = (s: Schedule, company: string) =>
@@ -184,9 +195,21 @@ export function CalendarPanel({
       window.removeEventListener("resize", close);
     };
   }, [groupPop]);
+  // 일정 캘린더(일정 확인·기업별)의 주말 보기는 이 브라우저에 기억한다 (누르기 전에는 저장된 값)
+  const savedWeekend = useSyncExternalStore(noSubscribe, readShowWeekend, () => false);
+  const [editedWeekend, setEditedWeekend] = useState<boolean | null>(null);
+  const showWeekend = editedWeekend ?? savedWeekend;
+  const toggleWeekend = () => {
+    const next = !showWeekend;
+    setEditedWeekend(next);
+    try {
+      localStorage.setItem(WEEKEND_KEY, next ? "1" : "");
+    } catch {}
+  };
+
   const days = monthGrid(year, month);
-  // 일정 캘린더(일정 확인·기업별)는 평일만, 업무 확인은 주말까지 보여 준다
-  const weekdaysOnly = mode !== "task";
+  // 업무 확인은 늘 주말까지, 일정 캘린더는 '주말' 버튼을 켰을 때만 주말을 보여 준다
+  const weekdaysOnly = mode !== "task" && !showWeekend;
   const cols = weekdaysOnly ? 5 : 7;
   const gridCls = weekdaysOnly ? "grid grid-cols-5" : "grid grid-cols-7";
   const cells = weekdaysOnly ? days.filter((d) => ![0, 6].includes(toUTCDate(d).getUTCDay())) : days;
@@ -299,6 +322,22 @@ export function CalendarPanel({
         <Button variant="ghost" onClick={onToday}>
           오늘
         </Button>
+        {mode !== "task" && (
+          <button
+            type="button"
+            aria-pressed={showWeekend}
+            onClick={toggleWeekend}
+            title={showWeekend ? "주말 숨기기" : "주말 보기"}
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-xs",
+              showWeekend
+                ? "border-slate-300 bg-slate-100 text-slate-700"
+                : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600",
+            )}
+          >
+            주말 {showWeekend ? "숨기기" : "보기"}
+          </button>
+        )}
         <span className="ml-auto hidden items-center gap-3 text-xs text-slate-500 sm:flex">
           <Legend />
         </span>
