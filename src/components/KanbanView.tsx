@@ -232,7 +232,7 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
   };
 
   return (
-    <section aria-label="칸반보드" className="min-w-0">
+    <section aria-label="칸반보드" className="@container min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-base font-semibold">칸반보드</h1>
         {(Object.keys(COPY_FORMATS) as CopyKind[]).map((k) => (
@@ -246,7 +246,7 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
           aria-label="WBS 복사 시 열 셀 위치"
           title="WBS 복사 시 열 셀 위치"
           placeholder={WBS_DEFAULT_CELL}
-          className={cn(inputCls, "w-18 text-center", !isCell(wbsCell) && "border-rose-400")}
+          className={cn(inputCls, "w-18! text-center", !isCell(wbsCell) && "border-rose-400")}
         />
         <Button variant="primary" onClick={() => setModal({})}>
           + 새 업무
@@ -293,7 +293,8 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      {/* 칸반 영역 폭이 660px 이하일 때만 열을 위아래로 쌓는다 */}
+      <div className="grid gap-3 @min-[661px]:grid-cols-3">
         {COLUMNS.map((category) => {
           const waiting = zoneTasks({ category, status: "대기" }).length;
           const done = zoneTasks({ category, status: "완료" }).length;
