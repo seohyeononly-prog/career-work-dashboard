@@ -102,7 +102,7 @@ export function HomeView({
         <Card
           title={`이번 주 일정 (${shortDate(weekStart)} ~ ${shortDate(weekEnd)})`}
           className="lg:col-span-2"
-          action={<Link href="/kanban?view=schedule" className="text-xs text-indigo-600 hover:underline">캘린더</Link>}
+          action={<Link href="/calendar?view=schedule" className="text-xs text-indigo-600 hover:underline">캘린더</Link>}
         >
           {weekSchedules.length ? (
             <ul className="divide-y divide-slate-100">

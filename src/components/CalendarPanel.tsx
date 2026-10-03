@@ -9,6 +9,7 @@ import {
   covers,
   rangeEnd,
   withoutCompany,
+  type Category,
   type Schedule,
   type Task,
 } from "@/lib/types";
@@ -121,12 +122,14 @@ function readShowWeekend() {
 export const matchesCompany = (s: Schedule, company: string) =>
   s.category === "일경험" && companyOf(s.title) !== "" && (company === ALL_COMPANIES || companyOf(s.title) === company);
 
-/** 월 캘린더. 날짜 선택·월 이동 상태는 부모(WorkView)가 가진다. */
+/** 월 캘린더. 날짜 선택·월 이동·필터 상태는 부모(CalendarView)가 가진다. */
 export function CalendarPanel({
   tasks,
   schedules,
   mode,
   onModeChange,
+  category,
+  onCategoryChange,
   company,
   onCompanyChange,
   year,
@@ -146,6 +149,9 @@ export function CalendarPanel({
   schedules: Schedule[];
   mode: CalendarMode;
   onModeChange: (m: CalendarMode) => void;
+  /** 카테고리 필터 (null = 전체). 걸러 낸 목록은 부모가 넘겨준다 */
+  category: Category | null;
+  onCategoryChange: (c: Category | null) => void;
   company: string;
   onCompanyChange: (c: string) => void;
   year: number;
@@ -267,8 +273,11 @@ export function CalendarPanel({
     <section aria-label="캘린더" className="min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-semibold">캘린더</h2>
-        {/* 업무 추가는 왼쪽 칸반보드의 버튼을 쓴다 */}
-        {mode !== "task" && (
+        {mode === "task" ? (
+          <Button variant="primary" onClick={() => onAddTask(selected)}>
+            + 새 업무
+          </Button>
+        ) : (
           <Button variant="primary" className={MODE_STYLE[mode].add} onClick={() => onAdd(selected)}>
             + 새 일정
           </Button>
@@ -338,9 +347,13 @@ export function CalendarPanel({
             주말 {showWeekend ? "숨기기" : "보기"}
           </button>
         )}
-        <span className="ml-auto hidden items-center gap-3 text-xs text-slate-500 sm:flex">
-          <Legend />
-        </span>
+        {mode === "company" ? (
+          <span className="ml-auto hidden items-center gap-3 text-xs text-slate-500 sm:flex">
+            <Legend />
+          </span>
+        ) : (
+          <CategoryFilter value={category} onChange={onCategoryChange} />
+        )}
       </div>
 
       <div className={cn("overflow-hidden rounded-lg border border-t-4 border-slate-200 bg-white", MODE_STYLE[mode].frame)}>
@@ -651,6 +664,33 @@ export function CalendarPanel({
           ))}
       </div>
     </section>
+  );
+}
+
+/** 카테고리 필터: 전체 또는 하나. 고른 것을 다시 누르면 전체로 */
+function CategoryFilter({ value, onChange }: { value: Category | null; onChange: (c: Category | null) => void }) {
+  const btn = (on: boolean) =>
+    cn(
+      "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
+      on ? "border-slate-300 bg-slate-100 font-medium text-slate-800" : "border-transparent text-slate-500 hover:bg-slate-50",
+    );
+  return (
+    <div role="group" aria-label="카테고리 필터" className="ml-auto flex flex-wrap items-center gap-1">
+      <button type="button" aria-pressed={value === null} onClick={() => onChange(null)} className={btn(value === null)}>
+        전체
+      </button>
+      {CATEGORIES.map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={value === c}
+          onClick={() => onChange(value === c ? null : c)}
+          className={btn(value === c)}
+        >
+          <span className={cn("h-2 w-2 rounded-full", CATEGORY_STYLE[c].dot)} /> {c}
+        </button>
+      ))}
+    </div>
   );
 }
 

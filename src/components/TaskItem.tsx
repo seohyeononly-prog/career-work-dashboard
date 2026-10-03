@@ -93,12 +93,15 @@ export function TaskCard({
   onToggleItem,
   onOpen,
   busy,
+  hideCategory,
 }: {
   task: Task;
   onToggle: (t: Task, done: boolean) => void;
   onToggleItem: ToggleItem;
   onOpen: (t: Task) => void;
   busy?: boolean;
+  /** 카테고리별 열 안에서는 카테고리 표시를 뺀다 */
+  hideCategory?: boolean;
 }) {
   const done = task.status === "완료";
   return (
@@ -114,7 +117,7 @@ export function TaskCard({
         <div className="min-w-0 flex-1">
           <h3 className={cn("text-sm font-medium break-words", done && "text-slate-400 line-through")}>{task.title}</h3>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <CategoryBadge c={task.category} />
+            {!hideCategory && <CategoryBadge c={task.category} />}
             <ChecklistBadge task={task} />
             <DueBadge task={task} />
             {task.endDate && <span className="text-[11px] text-slate-500">{rangeLabel(task)}</span>}

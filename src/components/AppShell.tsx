@@ -15,7 +15,8 @@ const NAV = [
     group: "업무관리",
     items: [
       { href: "/", label: "홈", icon: "⌂" },
-      { href: "/kanban", label: "칸반보드 · 캘린더", icon: "▦" },
+      { href: "/kanban", label: "칸반보드", icon: "▦" },
+      { href: "/calendar", label: "캘린더", icon: "▤" },
     ],
   },
 ];

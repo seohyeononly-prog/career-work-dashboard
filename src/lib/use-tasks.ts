@@ -65,19 +65,19 @@ export function useTasks(initial: Task[]) {
   };
 
   /**
-   * 칸반에서 다른 열로 끌어 놓기: 상태를 바꾸고 순서(ids)도 다시 매긴다.
-   * 시트 한 줄을 통째로 쓰는 상태 저장이 순서 저장을 덮지 않도록 차례로 저장한다.
+   * 칸반에서 다른 자리로 끌어 놓기: 상태·카테고리를 바꾸고 순서(ids)도 다시 매긴다.
+   * 시트 한 줄을 통째로 쓰는 업무 저장이 순서 저장을 덮지 않도록 차례로 저장한다.
    */
-  const moveTo = async (task: Task, status: TaskStatus, ids: string[]) => {
+  const moveTo = async (task: Task, patch: Partial<Pick<Task, "status" | "category">>, ids: string[]) => {
     setError("");
     const prev = tasks;
     const order = new Map(ids.map((id, i) => [id, i + 1]));
     setBusyId(task.id);
     setTasks((l) =>
-      l.map((t) => ({ ...t, ...(t.id === task.id && { status }), ...(order.has(t.id) && { order: order.get(t.id)! }) })),
+      l.map((t) => ({ ...t, ...(t.id === task.id && patch), ...(order.has(t.id) && { order: order.get(t.id)! }) })),
     );
     try {
-      await api.updateTask(task.id, { status });
+      await api.updateTask(task.id, patch);
       await api.reorderTasks(ids);
     } catch (e) {
       setTasks(prev);
