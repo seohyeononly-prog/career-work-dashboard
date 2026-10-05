@@ -1,6 +1,6 @@
 import "server-only";
 import { addDays, nowStr, todayStr } from "../date";
-import type { LinkItem, Schedule, Task } from "../types";
+import type { LinkItem, Routine, Schedule, Task } from "../types";
 
 // 개발용 예시 데이터. Google Sheets가 연결되지 않았을 때만 사용되며
 // 서버 메모리에만 있으므로 서버를 재시작하면 초기화된다.
@@ -10,6 +10,7 @@ export function createDevData(): {
   tasks: Task[];
   schedules: Schedule[];
   links: LinkItem[];
+  routines: Routine[];
 } {
   const t = todayStr();
   const d = (n: number) => addDays(t, n);
@@ -31,6 +32,7 @@ export function createDevData(): {
     startDate: d(startOffset),
     endDate: endOffset === undefined ? "" : d(endOffset),
     order: 0,
+    routineId: "",
     checklist: [],
     createdAt: now,
     updatedAt: now,
@@ -137,5 +139,47 @@ export function createDevData(): {
     },
   ];
 
-  return { tasks, schedules, links };
+  const routines: Routine[] = [
+    {
+      id: "dev-routine-1",
+      title: "메일·문의 확인",
+      category: "취업운영",
+      repeat: "평일",
+      weekdays: [],
+      monthDay: 1,
+      holidayShift: "앞",
+      checklist: [],
+      startDate: d(-30),
+      endDate: "",
+      skipDates: [],
+    },
+    {
+      id: "dev-routine-2",
+      title: "주간 운영 현황 공유",
+      category: "일경험",
+      repeat: "요일",
+      weekdays: [1, 3],
+      monthDay: 1,
+      holidayShift: "앞",
+      checklist: ["한빛소프트", "그린랩스"],
+      startDate: d(-30),
+      endDate: "",
+      skipDates: [],
+    },
+    {
+      id: "dev-routine-3",
+      title: "수당 서류 취합",
+      category: "일경험",
+      repeat: "매월",
+      weekdays: [],
+      monthDay: 10,
+      holidayShift: "앞",
+      checklist: [],
+      startDate: d(-30),
+      endDate: "",
+      skipDates: [],
+    },
+  ];
+
+  return { tasks, schedules, links, routines };
 }

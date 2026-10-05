@@ -2,10 +2,13 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client-api";
-import { addDays, todayStr } from "@/lib/date";
+import { addDays, shortDate, todayStr, WEEKDAYS } from "@/lib/date";
+import { isVirtual, repeatLabel, routineOccursOn, taskInputOf } from "@/lib/routines";
 import {
   CATEGORIES,
+  HOLIDAY_SHIFTS,
   LINK_CATEGORIES,
+  REPEAT_TYPES,
   SCHEDULE_KEYWORDS,
   SERVICE_TYPES,
   type Category,
@@ -14,6 +17,8 @@ import {
   type DateRange,
   type LinkInput,
   type LinkItem,
+  type Routine,
+  type RoutineInput,
   type Schedule,
   type Task,
   companyOf,
@@ -22,7 +27,7 @@ import {
   withoutCompany,
 } from "@/lib/types";
 import { useToast } from "./Toast";
-import { Button, ErrorNote, Field, Modal, Select, cn, inputCls } from "./ui";
+import { Button, CategoryBadge, Empty, ErrorNote, Field, Modal, Select, cn, inputCls } from "./ui";
 
 function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
   const [saving, setSaving] = useState(false);
@@ -42,11 +47,28 @@ function useSubmit<T>(save: () => Promise<T>, onSaved: (v: T) => void) {
   return { saving, error, submit };
 }
 
+/** 삭제 버튼·확인·토스트 문구. 루틴 업무는 삭제 대신 '이 날 건너뛰기'가 된다 */
+type DeleteText = { button: string; warn: string; confirm: string; busy: string; done: (what: string) => string };
+const DELETE_TEXT: DeleteText = {
+  button: "삭제",
+  warn: "삭제하면 되돌릴 수 없어요.",
+  confirm: "삭제하기",
+  busy: "삭제 중…",
+  done: (what) => `${what} 삭제했어요`,
+};
+const SKIP_TEXT: DeleteText = {
+  button: "이 날 건너뛰기",
+  warn: "이 날만 루틴에서 빠지고, 다른 날은 그대로 생겨요.",
+  confirm: "건너뛰기",
+  busy: "건너뛰는 중…",
+  done: () => "이 날은 루틴을 건너뛰었어요",
+};
+
 /**
  * 삭제 흐름: 삭제 → 창 안에서 한 번 더 확인 → 삭제 후 토스트.
  * remove가 없으면(새로 만들 때) 삭제 버튼을 보이지 않는다.
  */
-function useDelete(what: string, remove?: () => Promise<void>) {
+function useDelete(what: string, remove?: () => Promise<void>, text = DELETE_TEXT) {
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -58,7 +80,7 @@ function useDelete(what: string, remove?: () => Promise<void>) {
     setError("");
     try {
       await remove();
-      toast(`${what} 삭제했어요`);
+      toast(text.done(what));
     } catch (err) {
       setError((err as Error).message);
       setDeleting(false);
@@ -67,7 +89,7 @@ function useDelete(what: string, remove?: () => Promise<void>) {
   };
   return {
     error,
-    del: { confirming, deleting, ask: () => setConfirming(true), cancel: () => setConfirming(false), confirm },
+    del: { text, confirming, deleting, ask: () => setConfirming(true), cancel: () => setConfirming(false), confirm },
   };
 }
 type DeleteControl = ReturnType<typeof useDelete>["del"];
@@ -76,18 +98,18 @@ function Footer({ saving, onClose, del }: { saving: boolean; onClose: () => void
   if (del?.confirming)
     return (
       <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 ring-1 ring-rose-100">
-        <p className="mr-auto text-sm text-rose-700">삭제하면 되돌릴 수 없어요.</p>
+        <p className="mr-auto text-sm text-rose-700">{del.text.warn}</p>
         <Button type="button" onClick={del.cancel} disabled={del.deleting}>
           취소
         </Button>
         <Button
           type="button"
-          className="border-rose-600! bg-rose-600! text-white! hover:bg-rose-700!"
+          className="shrink-0 border-rose-600! bg-rose-600! text-white! hover:bg-rose-700!"
           onClick={del.confirm}
           disabled={del.deleting}
           autoFocus
         >
-          {del.deleting ? "삭제 중…" : "삭제하기"}
+          {del.deleting ? del.text.busy : del.text.confirm}
         </Button>
       </div>
     );
@@ -102,7 +124,7 @@ function Footer({ saving, onClose, del }: { saving: boolean; onClose: () => void
           onClick={del.ask}
           disabled={saving}
         >
-          삭제
+          {del.text.button}
         </Button>
       )}
       <Button type="button" onClick={onClose}>
@@ -254,11 +276,14 @@ function ChecklistEditor({
   value,
   onChange,
   companies,
+  template,
 }: {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
   /** 버튼으로 보여 줄 기업 (일경험일 때만) */
   companies: string[];
+  /** 루틴의 체크리스트 틀: 항목 이름만 정하고 체크는 하지 않는다 */
+  template?: boolean;
 }) {
   const [pending, setPending] = useState("");
   const has = (t: string) => value.some((c) => companyKey(c.text) === companyKey(t));
@@ -274,19 +299,26 @@ function ChecklistEditor({
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-medium text-slate-700">
-        체크리스트 {value.length > 0 && <span className="text-xs font-normal text-slate-500">({done}/{value.length})</span>}
+        체크리스트{" "}
+        {value.length > 0 && (
+          <span className="text-xs font-normal text-slate-500">
+            {template ? `(${value.length}개)` : `(${done}/${value.length})`}
+          </span>
+        )}
       </p>
       {value.length > 0 && (
         <ul className="space-y-1">
           {value.map((c, i) => (
             <li key={i} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 accent-emerald-600"
-                checked={c.done}
-                onChange={(e) => patch(i, { done: e.target.checked })}
-                aria-label={`${c.text} 완료`}
-              />
+              {!template && (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-emerald-600"
+                  checked={c.done}
+                  onChange={(e) => patch(i, { done: e.target.checked })}
+                  aria-label={`${c.text} 완료`}
+                />
+              )}
               <input
                 className={cn(inputCls, "py-1", c.done && "text-slate-400 line-through")}
                 value={c.text}
@@ -368,6 +400,8 @@ function ItemForm<T>({
   onClose,
   onSaved,
   remove,
+  deleteText,
+  note,
 }: {
   kind: "업무" | "일정";
   /** checklist가 있으면(빈 배열 포함) 체크리스트 편집 칸을 보여 준다 */
@@ -384,6 +418,10 @@ function ItemForm<T>({
   onSaved: (v: T) => void;
   /** 있으면 삭제 버튼을 보여준다 */
   remove?: () => Promise<void>;
+  /** 삭제 버튼 대신 다른 동작(예: 이 날 건너뛰기)일 때 문구 */
+  deleteText?: DeleteText;
+  /** 제목 위에 보여 줄 안내 */
+  note?: string;
 }) {
   const hasCompany = (c: Category) => !!companies && c === "일경험";
   // 일경험 일정은 제목의 '[기업]'을 기업 칸으로 떼어 낸다
@@ -417,6 +455,7 @@ function ItemForm<T>({
   const { error: deleteError, del } = useDelete(
     `'${initial.title}' ${kind}${kind === "업무" ? "를" : "을"}`,
     remove,
+    deleteText,
   );
   const error = saveError || deleteError;
   // 새 일경험 일정인데 기업이 비어 있으면 기업 칸부터
@@ -425,6 +464,7 @@ function ItemForm<T>({
   return (
     <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        {note && <p className="rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-700">{note}</p>}
         {companies && hasCompany(v.category) && (
           <PickField
             label="기업"
@@ -497,6 +537,7 @@ export function TaskFormModal({
   onClose,
   onSaved,
   onDeleted,
+  onRoutineSaved,
 }: {
   task?: Task;
   defaultDate?: string;
@@ -506,26 +547,38 @@ export function TaskFormModal({
   onClose: () => void;
   onSaved: (t: Task) => void;
   onDeleted?: (id: string) => void;
+  /** 루틴 업무를 '이 날 건너뛰기'해서 루틴의 건너뛴 날짜가 바뀌었을 때 */
+  onRoutineSaved?: (r: Routine) => void;
 }) {
+  // 오늘 이후의 루틴 업무는 지우는 대신 그날만 건너뛴다 (지우기만 하면 루틴 카드가 다시 생기므로)
+  const skips = !!task?.routineId && task.startDate >= todayStr();
   return (
     <ItemForm
       kind="업무"
       isEdit={!!task}
       checklistCompanies={companies}
       initial={{ ...draftOf(task, { category: defaultCategory, date: defaultDate }), checklist: task?.checklist ?? [] }}
+      note={task?.routineId ? "↻ 루틴에서 생긴 업무예요. 여기서 고치면 이 날만 바뀌어요." : undefined}
       save={({ checklist = [], ...v }) => {
         // 체크리스트가 있으면 다 체크했는지로 완료/대기를 정한다
         const status = statusOfChecklist(checklist);
+        if (task && isVirtual(task))
+          return api.createTask({ ...taskInputOf(task), ...v, checklist, status: status ?? task.status });
         return task
           ? api.updateTask(task.id, { ...v, checklist, ...(status && { status }) })
           : api.createTask({ ...v, checklist, status: status ?? "대기" });
       }}
       onClose={onClose}
       onSaved={onSaved}
+      deleteText={skips ? SKIP_TEXT : undefined}
       remove={
         task && onDeleted
           ? async () => {
-              await api.deleteTask(task.id);
+              if (!isVirtual(task)) await api.deleteTask(task.id);
+              if (skips) {
+                const r = await api.skipRoutine(task.routineId, task.startDate);
+                if (r) onRoutineSaved?.(r);
+              }
               onDeleted(task.id);
             }
           : undefined
@@ -657,3 +710,261 @@ export function LinkFormModal({
   );
 }
 
+
+// ---------- 루틴 ----------
+const WEEKDAY_CHOICES = [1, 2, 3, 4, 5].map((w) => ({ w, label: WEEKDAYS[w] }));
+
+const ROUTINE_DELETE_TEXT: DeleteText = { ...DELETE_TEXT, warn: "루틴을 지워도 이미 저장된 업무는 남아요." };
+
+/** 시작일(오늘 이전이면 오늘)부터 루틴이 생기는 날짜를 앞에서 몇 개 */
+function nextDates(r: Routine, count: number): string[] {
+  const out: string[] = [];
+  let d = r.startDate > todayStr() ? r.startDate : todayStr();
+  for (let i = 0; i < 400 && out.length < count && (!r.endDate || d <= r.endDate); i++, d = addDays(d, 1))
+    if (routineOccursOn(r, d)) out.push(d);
+  return out;
+}
+
+/** 루틴 목록 창. 목록에서 누르면 같은 창 안에서 수정 화면으로 바뀐다 */
+export function RoutinesModal({
+  routines,
+  companies,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  routines: Routine[];
+  /** 일경험 체크리스트에 버튼으로 보여 줄 기업 */
+  companies: string[];
+  onClose: () => void;
+  onSaved: (r: Routine) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState<Routine | "new" | null>(null);
+  if (editing)
+    return (
+      <RoutineForm
+        routine={editing === "new" ? undefined : editing}
+        companies={companies}
+        onBack={() => setEditing(null)}
+        onSaved={(r) => {
+          onSaved(r);
+          setEditing(null);
+        }}
+        onDeleted={(id) => {
+          onDeleted(id);
+          setEditing(null);
+        }}
+      />
+    );
+
+  const today = todayStr();
+  const list = [...routines].sort(
+    (a, b) => a.category.localeCompare(b.category, "ko") || a.title.localeCompare(b.title, "ko"),
+  );
+  return (
+    <Modal title="루틴" onClose={onClose}>
+      <p className="mb-3 text-xs text-slate-500">
+        루틴은 영업일(주말·공휴일·대체공휴일 제외)에만 칸반에 생겨요. 체크하거나 옮기면 그날 업무로 저장되고, 지나간 날에
+        못 한 루틴은 사라져요.
+      </p>
+      {list.length ? (
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {list.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => setEditing(r)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium break-words">{r.title}</span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    <CategoryBadge c={r.category} />
+                    {repeatLabel(r)}
+                    {r.endDate && r.endDate < today && <span className="text-rose-600">끝남</span>}
+                  </span>
+                </span>
+                <span className="text-slate-300">›</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty>등록한 루틴이 없어요.</Empty>
+      )}
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" onClick={onClose}>
+          닫기
+        </Button>
+        <Button type="button" variant="primary" onClick={() => setEditing("new")}>
+          + 새 루틴
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function RoutineForm({
+  routine,
+  companies,
+  onBack,
+  onSaved,
+  onDeleted,
+}: {
+  routine?: Routine;
+  companies: string[];
+  onBack: () => void;
+  onSaved: (r: Routine) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [v, setV] = useState<RoutineInput>(() => ({
+    title: routine?.title ?? "",
+    category: routine?.category ?? CATEGORIES[0],
+    repeat: routine?.repeat ?? "평일",
+    weekdays: routine?.weekdays ?? [],
+    monthDay: routine?.monthDay ?? 1,
+    holidayShift: routine?.holidayShift ?? "앞",
+    checklist: routine?.checklist ?? [],
+    startDate: routine?.startDate ?? todayStr(),
+    endDate: routine?.endDate ?? "",
+  }));
+  const set = (p: Partial<RoutineInput>) => setV((s) => ({ ...s, ...p }));
+  const { saving, error: saveError, submit } = useSubmit(
+    () => (routine ? api.updateRoutine(routine.id, v) : api.createRoutine(v)),
+    onSaved,
+  );
+  const { error: deleteError, del } = useDelete(
+    `'${routine?.title}' 루틴을`,
+    routine
+      ? async () => {
+          await api.deleteRoutine(routine.id);
+          onDeleted(routine.id);
+        }
+      : undefined,
+    ROUTINE_DELETE_TEXT,
+  );
+  const error = saveError || deleteError;
+  const upcoming = nextDates({ ...v, id: "", skipDates: routine?.skipDates ?? [] }, 5);
+  const toggleWeekday = (w: number) =>
+    set({
+      weekdays: v.weekdays.includes(w) ? v.weekdays.filter((x) => x !== w) : [...v.weekdays, w].sort((a, b) => a - b),
+    });
+
+  return (
+    <Modal title={routine ? "루틴 수정" : "새 루틴"} onClose={onBack}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="루틴명">
+          <input className={inputCls} value={v.title} onChange={(e) => set({ title: e.target.value })} required autoFocus />
+        </Field>
+        <Field label="카테고리">
+          <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
+        </Field>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-slate-600">반복</p>
+          <div className="flex gap-1" role="radiogroup" aria-label="반복">
+            {REPEAT_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={v.repeat === t}
+                onClick={() => set({ repeat: t })}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-sm ring-1 transition",
+                  v.repeat === t
+                    ? "bg-indigo-50 font-semibold text-indigo-700 ring-indigo-300"
+                    : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50",
+                )}
+              >
+                {t === "매월" ? "매월 N일" : t}
+              </button>
+            ))}
+          </div>
+          {v.repeat === "요일" && (
+            <div className="flex gap-1">
+              {WEEKDAY_CHOICES.map(({ w, label }) => {
+                const on = v.weekdays.includes(w);
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleWeekday(w)}
+                    className={cn(
+                      "h-8 w-8 rounded-full text-sm ring-1 transition",
+                      on
+                        ? "bg-indigo-600 text-white ring-indigo-600"
+                        : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {v.repeat === "매월" && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+              매월
+              <input
+                type="number"
+                min={1}
+                max={31}
+                className={cn(inputCls, "w-18! text-center")}
+                value={v.monthDay}
+                onChange={(e) => set({ monthDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })}
+                aria-label="매월 날짜"
+                required
+              />
+              일, 휴일이면
+              <Select
+                className="w-auto"
+                ariaLabel="휴일이면 옮길 날"
+                value={v.holidayShift}
+                options={HOLIDAY_SHIFTS.map((s) => ({ value: s, label: s === "앞" ? "앞 영업일" : "다음 영업일" }))}
+                onChange={(holidayShift) => set({ holidayShift })}
+              />
+            </div>
+          )}
+          <p className="text-xs text-slate-500">
+            {v.repeat === "매월" ? "그달에 그 날짜가 없으면 말일로 봐요. " : "주말·공휴일·대체공휴일에는 생기지 않아요. "}
+            {upcoming.length ? `다음: ${upcoming.map(shortDate).join(", ")}` : "앞으로 생길 날이 없어요."}
+          </p>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <Field label="적용 시작일">
+            <input
+              type="date"
+              className={inputCls}
+              value={v.startDate}
+              onChange={(e) => set({ startDate: e.target.value })}
+              required
+            />
+          </Field>
+          <span className="pb-2 text-slate-400">~</span>
+          <Field label="종료일 (비우면 계속)">
+            <input
+              type="date"
+              className={inputCls}
+              value={v.endDate}
+              min={v.startDate}
+              onChange={(e) => set({ endDate: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <ChecklistEditor
+          template
+          value={v.checklist.map((text) => ({ text, done: false }))}
+          onChange={(l) => set({ checklist: l.map((c) => c.text) })}
+          companies={v.category === "일경험" ? companies.slice(0, 12) : []}
+        />
+        {error && <ErrorNote message={error} />}
+        <Footer saving={saving} onClose={onBack} del={del} />
+      </form>
+    </Modal>
+  );
+}

@@ -37,6 +37,8 @@ export interface Task extends DateRange {
   checklist: ChecklistItem[];
   /** 칸반 순서(작을수록 위). 새 업무는 음수로 맨 위, 0이면 아직 정하지 않은 것(맨 뒤) */
   order: number;
+  /** 루틴에서 생긴 업무면 루틴 ID, 아니면 "" */
+  routineId: string;
   createdAt: string; // YYYY-MM-DD HH:mm
   updatedAt: string; // YYYY-MM-DD HH:mm
 }
@@ -45,6 +47,34 @@ export interface Schedule extends DateRange {
   id: string;
   title: string;
   category: Category;
+}
+
+/** 루틴 반복: 평일(월~금) / 고른 요일 / 매월 N일. 어느 쪽이든 공휴일·대체공휴일에는 생기지 않는다 */
+export const REPEAT_TYPES = ["평일", "요일", "매월"] as const;
+export type RepeatType = (typeof REPEAT_TYPES)[number];
+
+/** 매월 N일이 영업일이 아닐 때 옮길 쪽: 앞 영업일 / 다음 영업일 */
+export const HOLIDAY_SHIFTS = ["앞", "뒤"] as const;
+export type HolidayShift = (typeof HOLIDAY_SHIFTS)[number];
+
+/** 반복 업무. 날짜마다 칸반에 가상 카드로 보이고, 체크·끌기·수정할 때 비로소 업무로 저장된다 */
+export interface Routine {
+  id: string;
+  title: string;
+  category: Category;
+  repeat: RepeatType;
+  /** '요일'일 때 고른 요일 (1=월 ~ 5=금) */
+  weekdays: number[];
+  /** '매월'일 때 날짜 (1~31, 그달 말일보다 크면 말일) */
+  monthDay: number;
+  holidayShift: HolidayShift;
+  /** 업무를 만들 때 넣을 체크리스트 항목 이름 */
+  checklist: string[];
+  /** 루틴을 적용하는 기간. 종료일이 ""면 계속 */
+  startDate: string;
+  endDate: string;
+  /** '이 날 건너뛰기'한 날짜 */
+  skipDates: string[];
 }
 
 export interface LinkItem {
@@ -59,8 +89,9 @@ export interface LinkItem {
   order: number;
 }
 
-export type TaskInput = Omit<Task, "id" | "order" | "createdAt" | "updatedAt">;
+export type TaskInput = Omit<Task, "id" | "order" | "createdAt" | "updatedAt" | "routineId"> & { routineId?: string };
 export type ScheduleInput = Omit<Schedule, "id">;
+export type RoutineInput = Omit<Routine, "id" | "skipDates">;
 export type LinkInput = Omit<LinkItem, "id" | "order">;
 
 export type DataSource = "sheets" | "dev";

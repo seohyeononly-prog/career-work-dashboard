@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, companyNames, rangeEnd, type LinkItem, type Schedule, type Task } from "@/lib/types";
+import { isVirtual } from "@/lib/routines";
+import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, companyNames, rangeEnd, type LinkItem, type Routine, type Schedule, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
-import { ChecklistBadge, ChecklistChecks, CompleteCheckbox, DueBadge } from "./TaskItem";
+import { ChecklistBadge, ChecklistChecks, CompleteCheckbox, DueBadge, RoutineBadge } from "./TaskItem";
 import { CATEGORY_STYLE, Card, CategoryBadge, Empty, ErrorNote, PageHeader, cn } from "./ui";
 
 // 마감 기준은 업무의 마지막 날(기간 업무는 종료일)
@@ -15,19 +16,24 @@ const byDue = (a: Task, b: Task) => rangeEnd(a).localeCompare(rangeEnd(b));
 
 export function HomeView({
   initialTasks,
+  initialRoutines,
   schedules,
   links,
 }: {
   initialTasks: Task[];
+  initialRoutines: Routine[];
   schedules: Schedule[];
   links: LinkItem[];
 }) {
-  const { tasks, busyId, error, toggle, toggleItem, save, remove } = useTasks(initialTasks);
+  const { tasks, cardsOn, busyId, error, toggle, toggleItem, save, remove, saveRoutine } = useTasks(
+    initialTasks,
+    initialRoutines,
+  );
   const [editing, setEditing] = useState<Task | null>(null);
   const today = todayStr();
 
-  const dueToday = tasks
-    .filter((t) => rangeEnd(t) === today)
+  // 오늘 생기는 루틴(아직 저장 안 한 것)도 오늘 마감 업무에 넣는다
+  const dueToday = [...tasks.filter((t) => rangeEnd(t) === today), ...cardsOn(today)]
     .sort((a, b) => Number(a.status === "완료") - Number(b.status === "완료"));
   const open = tasks.filter((t) => t.status !== "완료");
   const overdue = open.filter((t) => t.startDate && rangeEnd(t) < today).sort(byDue);
@@ -51,6 +57,7 @@ export function HomeView({
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-1">
             <CategoryBadge c={t.category} />
+            {t.routineId && <RoutineBadge />}
             <ChecklistBadge task={t} />
             <DueBadge task={t} />
             <span className="text-xs text-slate-500">{rangeLabel(t)}</span>
@@ -203,13 +210,14 @@ export function HomeView({
           companies={companyNames(schedules)}
           onClose={() => setEditing(null)}
           onSaved={(t) => {
-            save(t);
+            save(t, isVirtual(editing) ? editing.id : undefined);
             setEditing(null);
           }}
           onDeleted={(id) => {
             remove(id);
             setEditing(null);
           }}
+          onRoutineSaved={saveRoutine}
         />
       )}
     </div>

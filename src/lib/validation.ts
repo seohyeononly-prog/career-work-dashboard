@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CATEGORIES, LINK_CATEGORIES, SERVICE_TYPES, TASK_STATUSES } from "./types";
+import { CATEGORIES, HOLIDAY_SHIFTS, LINK_CATEGORIES, REPEAT_TYPES, SERVICE_TYPES, TASK_STATUSES } from "./types";
 import { DATE_RE } from "./date";
 
 const text = (max: number) => z.string().trim().max(max);
@@ -32,10 +32,32 @@ export const taskInputSchema = z
       .max(50, "체크리스트는 50개까지 만들 수 있습니다.")
       .transform((l) => l.filter((c) => c.text))
       .default([]),
+    routineId: text(50).default(""),
     ...dateRange,
   })
   .refine(endNotBeforeStart, endMessage)
   .transform(collapseSameDay);
+
+export const routineInputSchema = z
+  .object({
+    title: text(200).min(1, "루틴 이름을 입력해 주세요."),
+    category,
+    repeat: z.enum(REPEAT_TYPES, { message: "반복은 평일, 요일, 매월 중 하나여야 합니다." }),
+    weekdays: z
+      .array(z.number().int().min(1).max(5), { message: "요일은 월~금 중에서 고를 수 있습니다." })
+      .transform((l) => [...new Set(l)].sort((a, b) => a - b))
+      .default([]),
+    monthDay: z.number({ message: "매월 날짜는 숫자여야 합니다." }).int().min(1, "매월 날짜는 1~31일입니다.").max(31, "매월 날짜는 1~31일입니다.").default(1),
+    holidayShift: z.enum(HOLIDAY_SHIFTS).default("앞"),
+    checklist: z
+      .array(z.string().transform((s) => s.replace(/\s+/g, " ")).pipe(text(100)))
+      .max(50, "체크리스트는 50개까지 만들 수 있습니다.")
+      .transform((l) => l.filter(Boolean))
+      .default([]),
+    ...dateRange,
+  })
+  .refine(endNotBeforeStart, endMessage)
+  .refine((r) => r.repeat !== "요일" || r.weekdays.length > 0, { message: "요일을 하나 이상 골라 주세요.", path: ["weekdays"] });
 
 export const scheduleInputSchema = z
   .object({

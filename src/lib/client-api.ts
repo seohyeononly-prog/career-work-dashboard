@@ -1,5 +1,5 @@
 // 브라우저에서 호출하는 API 래퍼. 자격 증명 없이 우리 서버의 /api 라우트만 호출한다.
-import type { LinkInput, LinkItem, Schedule, ScheduleInput, Task, TaskInput } from "./types";
+import type { LinkInput, LinkItem, Routine, RoutineInput, Schedule, ScheduleInput, Task, TaskInput } from "./types";
 
 async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -28,6 +28,13 @@ export const api = {
     request<LinkItem>(`/api/links/${encodeURIComponent(id)}`, "PATCH", v),
   deleteLink: (id: string) => request<{ ok: true }>(`/api/links/${encodeURIComponent(id)}`, "DELETE"),
   reorderLinks: (ids: string[]) => request<{ ok: true }>("/api/links/order", "PUT", { ids }),
+  createRoutine: (v: RoutineInput) => request<Routine>("/api/routines", "POST", v),
+  updateRoutine: (id: string, v: Partial<RoutineInput>) =>
+    request<Routine>(`/api/routines/${encodeURIComponent(id)}`, "PATCH", v),
+  deleteRoutine: (id: string) => request<{ ok: true }>(`/api/routines/${encodeURIComponent(id)}`, "DELETE"),
+  /** 그날만 루틴 건너뛰기. 루틴이 이미 지워졌으면 null */
+  skipRoutine: (id: string, date: string) =>
+    request<Routine | null>(`/api/routines/${encodeURIComponent(id)}/skip`, "POST", { date }),
 };
 
 /** 목록에서 같은 ID 항목을 교체하거나 새로 추가 */

@@ -1,11 +1,15 @@
 import "server-only";
+import { WEEKDAYS } from "../date";
 import {
   CATEGORIES,
+  HOLIDAY_SHIFTS,
   LINK_CATEGORIES,
+  REPEAT_TYPES,
   SERVICE_TYPES,
   TASK_STATUSES,
   type DateRange,
   type LinkItem,
+  type Routine,
   type Schedule,
   type Task,
 } from "../types";
@@ -63,7 +67,7 @@ const truthy = (v: string | undefined) => /^(true|y|yes|1|o|예)$/i.test((v ?? "
 
 export const TasksTable: TableDef<Task> = {
   sheet: "Tasks",
-  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서", "체크리스트"],
+  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서", "체크리스트", "루틴 ID"],
   toRow: (t) => [
     t.id,
     t.title,
@@ -75,6 +79,7 @@ export const TasksTable: TableDef<Task> = {
     t.updatedAt,
     t.order ? String(t.order) : "",
     checklistToCell(t.checklist),
+    t.routineId,
   ],
   fromRow: (r) =>
     r[0]?.trim()
@@ -88,6 +93,52 @@ export const TasksTable: TableDef<Task> = {
           updatedAt: normDateTime(r[7]),
           order: Number(r[8]) || 0,
           checklist: checklistFromCell(r[9]),
+          routineId: (r[10] ?? "").trim(),
+        }
+      : null,
+};
+
+/** 요일 칸: "월,수,금". 영업일 루틴이라 월~금만 읽는다 */
+const weekdaysToCell = (list: number[]) => list.map((w) => WEEKDAYS[w]).join(",");
+const weekdaysFromCell = (v: string | undefined) =>
+  [...new Set((v ?? "").split(/[,·\s]+/).map((w) => WEEKDAYS.indexOf(w.trim())))]
+    .filter((w) => w >= 1 && w <= 5)
+    .sort((a, b) => a - b);
+
+/** 날짜 목록 칸: 쉼표로 구분 */
+const datesFromCell = (v: string | undefined) => (v ?? "").split(/[,\s]+/).map(normDate).filter(Boolean);
+
+export const RoutinesTable: TableDef<Routine> = {
+  sheet: "Routines",
+  headers: ["루틴 ID", "루틴명", "카테고리", "반복", "요일", "매월 날짜", "휴일이면", "체크리스트", "시작일", "종료일", "건너뛴 날짜"],
+  toRow: (r) => [
+    r.id,
+    r.title,
+    r.category,
+    r.repeat,
+    weekdaysToCell(r.weekdays),
+    r.repeat === "매월" ? String(r.monthDay) : "",
+    r.holidayShift,
+    r.checklist.join("\n"),
+    r.startDate,
+    r.endDate,
+    r.skipDates.join(","),
+  ],
+  fromRow: (r) =>
+    r[0]?.trim()
+      ? {
+          id: r[0].trim(),
+          title: r[1] ?? "",
+          category: oneOf(CATEGORIES, r[2], "취업운영"),
+          repeat: oneOf(REPEAT_TYPES, r[3], "평일"),
+          weekdays: weekdaysFromCell(r[4]),
+          monthDay: Math.min(31, Math.max(1, Number(r[5]) || 1)),
+          holidayShift: oneOf(HOLIDAY_SHIFTS, r[6], "앞"),
+          checklist: (r[7] ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
+          // 업무와 달리 시작일 = 종료일도 그대로 둔다 (""는 '계속'이라서)
+          startDate: normDate(r[8]),
+          endDate: normDate(r[9]) >= normDate(r[8]) ? normDate(r[9]) : "",
+          skipDates: datesFromCell(r[10]),
         }
       : null,
 };

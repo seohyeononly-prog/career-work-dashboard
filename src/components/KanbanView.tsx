@@ -3,8 +3,9 @@
 import { useState, useSyncExternalStore } from "react";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
-import { byOrder, companyNames, covers, type Category, type Schedule, type Task, type TaskStatus } from "@/lib/types";
-import { TaskFormModal } from "./forms";
+import { isVirtual } from "@/lib/routines";
+import { byOrder, companyNames, type Category, type Routine, type Schedule, type Task, type TaskStatus } from "@/lib/types";
+import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
 import { useToast } from "./Toast";
 import { Button, CATEGORY_STYLE, Empty, ErrorNote, cn, inputCls } from "./ui";
@@ -73,11 +74,21 @@ const COPY_FORMATS = {
 type CopyKind = keyof typeof COPY_FORMATS;
 
 /** 칸반보드: 취업운영 / 일경험 / 기타 열, 열마다 대기 위·완료 아래 */
-export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; schedules: Schedule[] }) {
+export function KanbanView({
+  initialTasks,
+  initialRoutines,
+  schedules,
+}: {
+  initialTasks: Task[];
+  initialRoutines: Routine[];
+  schedules: Schedule[];
+}) {
   const today = todayStr();
-  const { tasks, busyId, error, toggle, toggleItem, save, remove, reorder, moveTo } = useTasks(initialTasks);
+  const { tasksOn, routines, busyId, error, toggle, toggleItem, save, remove, arrange, saveRoutine, removeRoutine } =
+    useTasks(initialTasks, initialRoutines);
   const [date, setDate] = useState(today);
   const [modal, setModal] = useState<{ task?: Task; category?: Category } | null>(null);
+  const [routinesOpen, setRoutinesOpen] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const toast = useToast();
 
@@ -108,8 +119,8 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
     if (d) setDate(d);
   };
 
-  /** 선택한 날짜의 업무 전체. 드래그 순서의 기준 */
-  const dayTasks = tasks.filter((t) => covers(t, date)).sort(byOrder);
+  /** 선택한 날짜의 업무 전체(아직 저장하지 않은 루틴 카드 포함). 드래그 순서의 기준 */
+  const dayTasks = tasksOn(date).sort(byOrder);
   const zoneTasks = (z: Zone) => dayTasks.filter((t) => t.category === z.category && t.status === z.status);
 
   /**
@@ -124,13 +135,17 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
     const at = target
       ? rest.findIndex((t) => t.id === target.id) + (target.after ? 1 : 0)
       : rest.findLastIndex((t) => t.category === zone.category && t.status === zone.status) + 1 || rest.length;
-    const ids = [...rest.slice(0, at), moving, ...rest.slice(at)].map((t) => t.id);
     const patch = {
       ...(moving.status !== zone.status && { status: zone.status }),
       ...(moving.category !== zone.category && { category: zone.category }),
     };
-    if (Object.keys(patch).length) moveTo(moving, patch, ids);
-    else if (!ids.every((id, i) => id === dayTasks[i].id && dayTasks[i].order === i + 1)) reorder(ids);
+    const list = [...rest.slice(0, at), { ...moving, ...patch }, ...rest.slice(at)];
+    const changed = Object.keys(patch).length > 0;
+    const sameOrder = list.every((t, i) => t.id === dayTasks[i].id);
+    // 제자리에 놓았으면 아무것도 하지 않는다 (순서가 아직 없던 날이면 이번에 매긴다)
+    const saved = list.filter((t) => !isVirtual(t));
+    if (!changed && sameOrder && (isVirtual(moving) || saved.every((t, i) => t.order === i + 1))) return;
+    arrange(list, moving, patch);
   };
 
   /** 선택한 날짜의 업무를 화면 순서(열 → 대기·완료 → 열 안 순서)대로 한 줄씩 복사한다 */
@@ -248,6 +263,9 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
           placeholder={WBS_DEFAULT_CELL}
           className={cn(inputCls, "w-18! text-center", !isCell(wbsCell) && "border-rose-400")}
         />
+        <Button onClick={() => setRoutinesOpen(true)} title="반복 업무 관리">
+          <span aria-hidden>↻</span> 루틴
+        </Button>
         <Button variant="primary" onClick={() => setModal({})}>
           + 새 업무
         </Button>
@@ -343,13 +361,24 @@ export function KanbanView({ initialTasks, schedules }: { initialTasks: Task[]; 
           companies={companyNames(schedules)}
           onClose={() => setModal(null)}
           onSaved={(t) => {
-            save(t);
+            save(t, modal.task && isVirtual(modal.task) ? modal.task.id : undefined);
             setModal(null);
           }}
           onDeleted={(id) => {
             remove(id);
             setModal(null);
           }}
+          onRoutineSaved={saveRoutine}
+        />
+      )}
+
+      {routinesOpen && (
+        <RoutinesModal
+          routines={routines}
+          companies={companyNames(schedules)}
+          onClose={() => setRoutinesOpen(false)}
+          onSaved={saveRoutine}
+          onDeleted={removeRoutine}
         />
       )}
     </section>

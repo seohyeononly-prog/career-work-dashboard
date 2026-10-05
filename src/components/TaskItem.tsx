@@ -1,6 +1,7 @@
 "use client";
 
 import { diffDays, rangeLabel, todayStr } from "@/lib/date";
+import { isVirtual } from "@/lib/routines";
 import { rangeEnd, type Task } from "@/lib/types";
 import { Badge, CategoryBadge, cn } from "./ui";
 
@@ -109,6 +110,7 @@ export function TaskCard({
       onClick={() => onOpen(task)}
       className={cn(
         "cursor-pointer rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm transition hover:border-indigo-300",
+        isVirtual(task) && "border-dashed",
         busy && "opacity-60",
       )}
     >
@@ -118,6 +120,7 @@ export function TaskCard({
           <h3 className={cn("text-sm font-medium break-words", done && "text-slate-400 line-through")}>{task.title}</h3>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {!hideCategory && <CategoryBadge c={task.category} />}
+            {task.routineId && <RoutineBadge />}
             <ChecklistBadge task={task} />
             <DueBadge task={task} />
             {task.endDate && <span className="text-[11px] text-slate-500">{rangeLabel(task)}</span>}
@@ -128,3 +131,10 @@ export function TaskCard({
     </article>
   );
 }
+
+/** 루틴에서 생긴 업무 표시 */
+export const RoutineBadge = () => (
+  <Badge className="bg-violet-50 text-violet-700">
+    <span aria-hidden>↻</span>&nbsp;루틴
+  </Badge>
+);

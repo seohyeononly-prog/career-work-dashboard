@@ -1,13 +1,13 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { revalidateTag, unstable_cache } from "next/cache";
-import { nowStr } from "../date";
-import type { DataSource, LinkItem, Schedule, Task } from "../types";
+import { DATE_RE, nowStr, todayStr } from "../date";
+import type { DataSource, LinkItem, Routine, Schedule, Task } from "../types";
 import type { z } from "zod";
-import { firstIssue, linkInputSchema, scheduleInputSchema, taskInputSchema } from "../validation";
+import { firstIssue, linkInputSchema, routineInputSchema, scheduleInputSchema, taskInputSchema } from "../validation";
 import { createDevData } from "./dev-data";
 import { appendRow, deleteRow, ensureSheets, isSheetsConfigured, readAll, updateColumn, updateRow } from "./sheets";
-import { LinksTable, SchedulesTable, TasksTable, type TableDef } from "./tables";
+import { LinksTable, RoutinesTable, SchedulesTable, TasksTable, type TableDef } from "./tables";
 
 // 데이터 접근 계층. 환경변수가 설정되어 있으면 Google Sheets,
 // 아니면 서버 메모리의 개발용 예시 데이터를 사용한다.
@@ -29,7 +29,7 @@ type DevDb = ReturnType<typeof createDevData>;
 const g = globalThis as unknown as { __devDb?: DevDb };
 const devDb = (): DevDb => (g.__devDb ??= createDevData());
 
-const ALL_TABLES = [TasksTable, SchedulesTable, LinksTable] as unknown as TableDef<{ id: string }>[];
+const ALL_TABLES = [TasksTable, SchedulesTable, LinksTable, RoutinesTable] as unknown as TableDef<{ id: string }>[];
 
 /**
  * 시트 읽기 결과를 잠깐 저장해 두는 시간(초). 화면 전환마다 Sheets API를 부르지 않기 위함.
@@ -105,6 +105,7 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
 const tasksRepo = makeRepo(TasksTable, "tasks");
 const schedulesRepo = makeRepo(SchedulesTable, "schedules");
 const linksRepo = makeRepo(LinksTable, "links");
+const routinesRepo = makeRepo(RoutinesTable, "routines");
 
 function parse<T>(schema: z.ZodType<T>, v: unknown): T {
   const r = schema.safeParse(v);
@@ -203,4 +204,37 @@ export const reorderLinks = (input: unknown) =>
 export async function deleteLink(id: string): Promise<{ ok: true }> {
   await linksRepo.remove(id);
   return { ok: true };
+}
+
+// ---- 루틴 ----
+export const listRoutines = () => routinesRepo.list();
+
+export async function createRoutine(input: unknown): Promise<Routine> {
+  const data = parse(routineInputSchema, input);
+  return routinesRepo.insert({ id: newId("R"), ...data, skipDates: [] });
+}
+
+export async function updateRoutine(id: string, patch: unknown): Promise<Routine> {
+  const current = await routinesRepo.get(id);
+  const data = parse(routineInputSchema, { ...current, ...(patch as object) });
+  return routinesRepo.replace({ ...current, ...data, id });
+}
+
+export async function deleteRoutine(id: string): Promise<{ ok: true }> {
+  await routinesRepo.remove(id);
+  return { ok: true };
+}
+
+/** 그날만 루틴을 건너뛴다. 지나간 건너뛴 날짜는 이때 정리한다. 루틴이 이미 지워졌으면 null */
+export async function skipRoutine(id: string, input: unknown): Promise<Routine | null> {
+  const date = (input as { date?: unknown } | null)?.date;
+  if (typeof date !== "string" || !DATE_RE.test(date)) throw new ValidationError("건너뛸 날짜가 올바르지 않습니다.");
+  const current = await routinesRepo.get(id).catch((e) => {
+    if (e instanceof NotFoundError) return null;
+    throw e;
+  });
+  if (!current) return null;
+  const today = todayStr();
+  const skipDates = [...new Set([...current.skipDates, date])].filter((d) => d >= today).sort();
+  return routinesRepo.replace({ ...current, skipDates });
 }
