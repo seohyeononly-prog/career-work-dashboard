@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
-import { byOrder, companyNames, type Category, type Routine, type Schedule, type Task, type TaskStatus } from "@/lib/types";
+import { byOrder, companyNames, companyOf, rangeEnd, type Category, type Routine, type Schedule, type Task, type TaskStatus } from "@/lib/types";
 import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
 import { useToast } from "./Toast";
@@ -63,15 +63,24 @@ function readHideDone() {
   }
 }
 
-/** 복사 버튼 형식: 마감보고는 본부명을 앞에 붙이고, 기타 카테고리는 카테고리명을 뺀다 */
-const COPY_FORMATS = {
-  report: {
-    label: "마감보고 복사",
-    line: (t: Task) => `[교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`,
-  },
-  wbs: { label: "WBS 복사", line: (t: Task) => `${t.category} ${t.title}` },
-} as const;
-type CopyKind = keyof typeof COPY_FORMATS;
+/** 마감보고 한 줄: 본부명을 앞에 붙이고, 기타 카테고리는 카테고리명을 뺀다 */
+const reportLine = (t: Task) => `[교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`;
+
+/** WBS 시트의 구역 이름. 기타 열은 AI리더 구역이다 */
+const WBS_SECTION: Record<Category, string> = { 취업운영: "취업운영", 일경험: "일경험", 기타: "AI리더" };
+
+/**
+ * WBS 한 행(B~J열)을 탭으로 나눈 줄. 시트에 붙이면 칸마다 나뉘어 들어간다.
+ * 구분(기업명 또는 구역) · 담당자 · 본부 · 유형 · 업무명 · G·H(빈칸) · 시작일 · 종료일
+ */
+function wbsRow(t: Task) {
+  const section = WBS_SECTION[t.category];
+  const title = t.title.replace(/\s+/g, " ").trim();
+  const org = t.category === "일경험" ? "일경험" : /주간\s*미팅/.test(title) ? "B2G교육사업본부" : "오즈코딩스쿨";
+  const type = /회의|미팅/.test(title) ? "미팅" : "운영";
+  const name = title.startsWith(section) ? title : `${section} ${title}`;
+  return [companyOf(title) || section, "박서현", org, type, name, "", "", t.startDate, rangeEnd(t)].join("\t");
+}
 
 /** 칸반보드: 취업운영 / 일경험 / 기타 열, 열마다 대기 위·완료 아래 */
 export function KanbanView({
@@ -148,25 +157,28 @@ export function KanbanView({
     arrange(list, moving, patch);
   };
 
-  /** 선택한 날짜의 업무를 화면 순서(열 → 대기·완료 → 열 안 순서)대로 한 줄씩 복사한다 */
-  const copyTasks = async (kind: CopyKind) => {
-    const lines = COLUMNS.flatMap((category) =>
-      (["대기", "완료"] as const).flatMap((status) => zoneTasks({ category, status })),
-    ).map(COPY_FORMATS[kind].line);
-    const name = COPY_FORMATS[kind].label.replace(" 복사", "");
-    if (!lines.length) toast("이 날짜에 복사할 업무가 없어요", "error");
-    else {
-      try {
-        await copyText(lines.join("\n"));
-        toast(`${name} ${lines.length}건을 복사했어요`);
-      } catch {
-        toast("복사하지 못했어요. 다시 시도해 주세요", "error");
-      }
+  /** 한 열의 업무를 화면 순서(대기 → 완료, 칸 안 순서)대로 */
+  const columnTasks = (category: Category) =>
+    (["대기", "완료"] as const).flatMap((status) => zoneTasks({ category, status }));
+
+  const copyLines = async (lines: string[], name: string) => {
+    if (!lines.length) return toast("복사할 업무가 없어요", "error");
+    try {
+      await copyText(lines.join("\n"));
+      toast(`${name} ${lines.length}건을 복사했어요`);
+    } catch {
+      toast("복사하지 못했어요. 다시 시도해 주세요", "error");
     }
-    // 새 탭을 먼저 열면 문서 포커스를 잃어 클립보드 쓰기가 실패하므로 복사 후에 연다
-    if (kind === "wbs")
-      window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
   };
+  /** 선택한 날짜의 업무 전체를 열 순서대로 */
+  const copyReport = () => copyLines(COLUMNS.flatMap(columnTasks).map(reportLine), "마감보고");
+  /** 한 열을 WBS 행 형식으로. 루틴은 WBS 루틴 구역에 따로 있으므로 뺀다 */
+  const copyWbs = (category: Category) =>
+    copyLines(
+      columnTasks(category).filter((t) => !t.routineId).map(wbsRow),
+      `WBS ${WBS_SECTION[category]}`,
+    );
+  const openWbs = () => window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
 
   /** 대기·완료 칸 하나: 빈 곳에 놓으면 칸 맨 아래로 */
   const renderZone = (zone: Zone) => {
@@ -250,16 +262,13 @@ export function KanbanView({
     <section aria-label="칸반보드" className="@container min-w-0">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-base font-semibold">칸반보드</h1>
-        {(Object.keys(COPY_FORMATS) as CopyKind[]).map((k) => (
-          <Button key={k} onClick={() => copyTasks(k)}>
-            {COPY_FORMATS[k].label}
-          </Button>
-        ))}
+        <Button onClick={copyReport}>마감보고 복사</Button>
+        <Button onClick={openWbs}>WBS 열기</Button>
         <input
           value={wbsCell}
           onChange={(e) => changeWbsCell(e.target.value)}
-          aria-label="WBS 복사 시 열 셀 위치"
-          title="WBS 복사 시 열 셀 위치"
+          aria-label="WBS 열 때 이동할 셀 위치"
+          title="WBS 열 때 이동할 셀 위치"
           placeholder={WBS_DEFAULT_CELL}
           className={cn(inputCls, "w-18! text-center", !isCell(wbsCell) && "border-rose-400")}
         />
@@ -327,7 +336,15 @@ export function KanbanView({
             >
               <header className="flex items-center gap-2 px-2.5 py-2">
                 <span className={cn("h-2 w-2 rounded-full", CATEGORY_STYLE[category].dot)} />
-                <h2 className="mr-auto text-sm font-semibold">{category}</h2>
+                <h2 className="text-sm font-semibold">{category}</h2>
+                <button
+                  type="button"
+                  onClick={() => copyWbs(category)}
+                  title={`WBS ${WBS_SECTION[category]} 구역에 붙일 행 복사 (B열에 붙여 넣기)`}
+                  className="mr-auto rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-white hover:text-slate-700"
+                >
+                  WBS 복사
+                </button>
                 <span className="text-xs text-slate-500">
                   대기 {waiting} · 완료 {done}
                 </span>

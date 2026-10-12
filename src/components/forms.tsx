@@ -6,6 +6,7 @@ import { addDays, shortDate, todayStr, WEEKDAYS } from "@/lib/date";
 import { isVirtual, repeatLabel, routineOccursOn, taskInputOf } from "@/lib/routines";
 import {
   CATEGORIES,
+  DEFAULT_CATEGORY,
   HOLIDAY_SHIFTS,
   LINK_CATEGORIES,
   REPEAT_TYPES,
@@ -523,7 +524,7 @@ const draftOf = (
     ? { title: item.title, category: item.category, startDate: item.startDate, endDate: item.endDate }
     : {
         title: defaults.title ?? "",
-        category: defaults.category ?? CATEGORIES[0],
+        category: defaults.category ?? DEFAULT_CATEGORY,
         startDate: defaults.date ?? todayStr(),
         endDate: "",
       };
@@ -820,7 +821,7 @@ function RoutineForm({
 }) {
   const [v, setV] = useState<RoutineInput>(() => ({
     title: routine?.title ?? "",
-    category: routine?.category ?? CATEGORIES[0],
+    category: routine?.category ?? DEFAULT_CATEGORY,
     repeat: routine?.repeat ?? "평일",
     weekdays: routine?.weekdays ?? [],
     monthDay: routine?.monthDay ?? 1,

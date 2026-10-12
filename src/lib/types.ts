@@ -3,6 +3,8 @@
 /** 업무·일정 카테고리 */
 export const CATEGORIES = ["일경험", "취업운영", "기타"] as const;
 export type Category = (typeof CATEGORIES)[number];
+/** 새로 입력할 때 처음 골라 둘 카테고리 */
+export const DEFAULT_CATEGORY: Category = "취업운영";
 
 /** 링크 카테고리 (사이드바 토글 하나씩. 업무 카테고리와 달리 기타는 없고 교육사업본부가 있음) */
 export const LINK_CATEGORIES = ["일경험", "취업운영", "교육사업본부"] as const;
