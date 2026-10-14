@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api, upsert } from "./client-api";
 import { todayStr } from "./date";
 import { isExpiredRoutine, isVirtual, routineCards, taskInputOf } from "./routines";
-import { covers, statusOfChecklist, type Routine, type Task, type TaskInput, type TaskStatus } from "./types";
+import { covers, type Routine, type Task, type TaskInput, type TaskStatus } from "./types";
 
 /**
  * 업무 목록 상태와 상태 변경 처리(낙관적 업데이트, 실패 시 되돌림).
@@ -55,12 +55,6 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
 
   // 체크하면 완료, 체크 해제하면 미완료(대기)로 되돌린다
   const toggle = (task: Task, done: boolean) => changeStatus(task, done ? "완료" : "대기");
-
-  /** 체크리스트 한 줄 체크. 다 체크하면 업무도 완료, 하나라도 풀면 다시 대기 */
-  const toggleItem = (task: Task, index: number, done: boolean) => {
-    const checklist = task.checklist.map((c, i) => (i === index ? { ...c, done } : c));
-    return patchTask(task, { checklist, status: statusOfChecklist(checklist) ?? task.status });
-  };
 
   /** 수정 창에서 저장한 업무. 가상 카드를 저장했으면(replaces) 그 카드 자리를 바꾼다 */
   const save = (t: Task, replaces?: string) =>
@@ -114,7 +108,6 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
     busyId,
     error,
     toggle,
-    toggleItem,
     changeStatus,
     save,
     remove,

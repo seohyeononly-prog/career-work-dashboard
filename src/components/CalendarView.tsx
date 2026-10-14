@@ -128,7 +128,6 @@ export function CalendarView({
           task={modal.task}
           defaultDate={modal.date}
           defaultCategory={category ?? undefined}
-          companies={companyNames(schedules)}
           onClose={() => setModal(null)}
           onSaved={(t) => {
             save(t);

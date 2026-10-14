@@ -50,24 +50,12 @@ function readRange(start: string | undefined, end: string | undefined): DateRang
   return { startDate, endDate: endDate > startDate ? endDate : "" };
 }
 
-/** 체크리스트 칸: 한 줄에 하나씩 '[x] 기업A' / '[ ] 기업B'. 시트에서 직접 고치기 쉽게 글로 저장한다 */
-const checklistToCell = (list: Task["checklist"]) => list.map((c) => `[${c.done ? "x" : " "}] ${c.text}`).join("\n");
-
-function checklistFromCell(v: string | undefined): Task["checklist"] {
-  return (v ?? "")
-    .split(/\r?\n/)
-    .map((line) => {
-      const m = line.match(/^\s*\[(.?)\]\s*(.*)$/);
-      return m ? { text: m[2].trim(), done: m[1].trim() !== "" } : { text: line.trim(), done: false };
-    })
-    .filter((c) => c.text);
-}
-
 const truthy = (v: string | undefined) => /^(true|y|yes|1|o|예)$/i.test((v ?? "").trim());
 
 export const TasksTable: TableDef<Task> = {
   sheet: "Tasks",
-  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서", "체크리스트", "루틴 ID"],
+  // 메모는 예전 체크리스트 칸 자리라, 예전 체크리스트 글('[x] 기업A')이 메모로 보인다
+  headers: ["업무 ID", "업무명", "카테고리", "상태", "시작일", "종료일", "생성일", "수정일", "순서", "메모", "루틴 ID", "링크"],
   toRow: (t) => [
     t.id,
     t.title,
@@ -78,8 +66,9 @@ export const TasksTable: TableDef<Task> = {
     t.createdAt,
     t.updatedAt,
     t.order ? String(t.order) : "",
-    checklistToCell(t.checklist),
+    t.memo,
     t.routineId,
+    t.link,
   ],
   fromRow: (r) =>
     r[0]?.trim()
@@ -92,8 +81,9 @@ export const TasksTable: TableDef<Task> = {
           createdAt: normDateTime(r[6]),
           updatedAt: normDateTime(r[7]),
           order: Number(r[8]) || 0,
-          checklist: checklistFromCell(r[9]),
+          memo: r[9] ?? "",
           routineId: (r[10] ?? "").trim(),
+          link: (r[11] ?? "").trim(),
         }
       : null,
 };
@@ -110,7 +100,7 @@ const datesFromCell = (v: string | undefined) => (v ?? "").split(/[,\s]+/).map(n
 
 export const RoutinesTable: TableDef<Routine> = {
   sheet: "Routines",
-  headers: ["루틴 ID", "루틴명", "카테고리", "반복", "요일", "매월 날짜", "휴일이면", "체크리스트", "시작일", "종료일", "건너뛴 날짜"],
+  headers: ["루틴 ID", "루틴명", "카테고리", "반복", "요일", "매월 날짜", "휴일이면", "메모", "시작일", "종료일", "건너뛴 날짜", "링크"],
   toRow: (r) => [
     r.id,
     r.title,
@@ -119,10 +109,11 @@ export const RoutinesTable: TableDef<Routine> = {
     weekdaysToCell(r.weekdays),
     r.repeat === "매월" ? String(r.monthDay) : "",
     r.holidayShift,
-    r.checklist.join("\n"),
+    r.memo,
     r.startDate,
     r.endDate,
     r.skipDates.join(","),
+    r.link,
   ],
   fromRow: (r) =>
     r[0]?.trim()
@@ -134,11 +125,12 @@ export const RoutinesTable: TableDef<Routine> = {
           weekdays: weekdaysFromCell(r[4]),
           monthDay: Math.min(31, Math.max(1, Number(r[5]) || 1)),
           holidayShift: oneOf(HOLIDAY_SHIFTS, r[6], "앞"),
-          checklist: (r[7] ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
+          memo: r[7] ?? "",
           // 업무와 달리 시작일 = 종료일도 그대로 둔다 (""는 '계속'이라서)
           startDate: normDate(r[8]),
           endDate: normDate(r[9]) >= normDate(r[8]) ? normDate(r[9]) : "",
           skipDates: datesFromCell(r[10]),
+          link: (r[11] ?? "").trim(),
         }
       : null,
 };

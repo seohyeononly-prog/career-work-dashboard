@@ -34,56 +34,36 @@ export function CompleteCheckbox({
   );
 }
 
-export type ToggleItem = (t: Task, index: number, done: boolean) => void;
+/** 링크 주소를 짧게: 도메인만 (www. 뺌) */
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
 
-/** 체크리스트 진행률 (예: 2/5). 체크리스트가 없으면 아무것도 안 보인다 */
-export function ChecklistBadge({ task }: { task: Task }) {
-  const total = task.checklist.length;
-  if (!total) return null;
-  const done = task.checklist.filter((c) => c.done).length;
+/** 카드·목록에 보이는 메모(두 줄까지)와 링크. 링크를 누르면 업무 창이 열리지 않고 새 탭으로 연다 */
+export function MemoLink({ task }: { task: Task }) {
+  const memo = task.memo.trim();
+  if (!memo && !task.link) return null;
   return (
-    <Badge className={done === total ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}>
-      {done}/{total}
-    </Badge>
-  );
-}
-
-/** 카드·목록에서 바로 체크하는 체크리스트. 누르면 업무 창이 열리지 않고 체크만 바뀐다 */
-export function ChecklistChecks({
-  task,
-  onToggleItem,
-  disabled,
-}: {
-  task: Task;
-  onToggleItem: ToggleItem;
-  disabled?: boolean;
-}) {
-  if (!task.checklist.length) return null;
-  return (
-    <ul className="mt-1.5 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-      {task.checklist.map((c, i) => (
-        <li key={i}>
-          <label
-            className={cn(
-              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition",
-              c.done
-                ? "bg-emerald-50 text-emerald-700 line-through ring-emerald-200"
-                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
-              disabled && "cursor-wait",
-            )}
-          >
-            <input
-              type="checkbox"
-              className="h-3 w-3 accent-emerald-600"
-              checked={c.done}
-              disabled={disabled}
-              onChange={(e) => onToggleItem(task, i, e.target.checked)}
-            />
-            {c.text}
-          </label>
-        </li>
-      ))}
-    </ul>
+    <div className="mt-1.5 space-y-1">
+      {memo && <p className="line-clamp-2 text-xs break-words whitespace-pre-line text-slate-500">{memo}</p>}
+      {task.link && (
+        <a
+          href={task.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={task.link}
+          className="inline-flex max-w-full items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
+        >
+          <span aria-hidden>🔗</span>
+          <span className="truncate">{hostOf(task.link)}</span>
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -91,14 +71,12 @@ export function ChecklistChecks({
 export function TaskCard({
   task,
   onToggle,
-  onToggleItem,
   onOpen,
   busy,
   hideCategory,
 }: {
   task: Task;
   onToggle: (t: Task, done: boolean) => void;
-  onToggleItem: ToggleItem;
   onOpen: (t: Task) => void;
   busy?: boolean;
   /** 카테고리별 열 안에서는 카테고리 표시를 뺀다 */
@@ -121,11 +99,10 @@ export function TaskCard({
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {!hideCategory && <CategoryBadge c={task.category} />}
             {task.routineId && <RoutineBadge />}
-            <ChecklistBadge task={task} />
             <DueBadge task={task} />
             {task.endDate && <span className="text-[11px] text-slate-500">{rangeLabel(task)}</span>}
           </div>
-          <ChecklistChecks task={task} onToggleItem={onToggleItem} disabled={busy} />
+          <MemoLink task={task} />
         </div>
       </div>
     </article>

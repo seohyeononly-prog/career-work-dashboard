@@ -25,18 +25,15 @@ export interface DateRange {
   endDate: string;
 }
 
-/** 업무 안의 체크리스트 한 줄 (예: 같은 업무를 여러 기업에 할 때 기업 하나) */
-export interface ChecklistItem {
-  text: string;
-  done: boolean;
-}
-
 export interface Task extends DateRange {
   id: string;
   title: string;
   category: Category;
   status: TaskStatus;
-  checklist: ChecklistItem[];
+  /** 메모 (여러 줄) */
+  memo: string;
+  /** 관련 링크 URL. 없으면 "" */
+  link: string;
   /** 칸반 순서(작을수록 위). 새 업무는 음수로 맨 위, 0이면 아직 정하지 않은 것(맨 뒤) */
   order: number;
   /** 루틴에서 생긴 업무면 루틴 ID, 아니면 "" */
@@ -70,8 +67,9 @@ export interface Routine {
   /** '매월'일 때 날짜 (1~31, 그달 말일보다 크면 말일) */
   monthDay: number;
   holidayShift: HolidayShift;
-  /** 업무를 만들 때 넣을 체크리스트 항목 이름 */
-  checklist: string[];
+  /** 업무를 만들 때 넣을 메모·링크 */
+  memo: string;
+  link: string;
   /** 루틴을 적용하는 기간. 종료일이 ""면 계속 */
   startDate: string;
   endDate: string;
@@ -109,10 +107,6 @@ export const byOrder = (a: Task, b: Task) =>
   (a.order || Infinity) - (b.order || Infinity) ||
   a.startDate.localeCompare(b.startDate) ||
   a.title.localeCompare(b.title, "ko");
-
-/** 체크리스트를 다 채웠는지에 따른 업무 상태. 체크리스트가 없으면 null(상태를 건드리지 않음) */
-export const statusOfChecklist = (list: ChecklistItem[]): TaskStatus | null =>
-  list.length ? (list.every((c) => c.done) ? "완료" : "대기") : null;
 
 /** 링크 표시 순서: 드래그로 정한 순서 → 링크명 */
 export const byLinkOrder = (a: LinkItem, b: LinkItem) =>

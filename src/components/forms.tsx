@@ -13,7 +13,6 @@ import {
   SCHEDULE_KEYWORDS,
   SERVICE_TYPES,
   type Category,
-  type ChecklistItem,
   type LinkCategory,
   type DateRange,
   type LinkInput,
@@ -23,7 +22,6 @@ import {
   type Schedule,
   type Task,
   companyOf,
-  statusOfChecklist,
   withCompany,
   withoutCompany,
 } from "@/lib/types";
@@ -188,8 +186,10 @@ function DateRangeFields({ value, onChange }: { value: DateRange; onChange: (v: 
   );
 }
 
-/** checklist는 업무에만 있다 */
-type Draft = { title: string; category: Category; checklist?: ChecklistItem[] } & DateRange;
+type MemoLink = { memo: string; link: string };
+
+/** 메모·링크는 업무에만 있다 */
+type Draft = { title: string; category: Category } & Partial<MemoLink> & DateRange;
 
 /** 기업명 비교용: 공백·대소문자 무시 */
 const companyKey = (c: string) => c.replace(/\s/g, "").toLowerCase();
@@ -262,130 +262,28 @@ function PickField({
   );
 }
 
-/** 쉼표·줄바꿈으로 나눈 항목 이름들 */
-const splitItems = (s: string) =>
-  s
-    .split(/[,\n\r\t]/)
-    .map((x) => x.trim())
-    .filter(Boolean);
-
-/**
- * 업무 체크리스트 편집: 같은 업무를 여러 기업에 할 때 기업마다 한 줄.
- * 입력칸에 쓰고 Enter(쉼표·줄바꿈으로 여러 개), 또는 기업 버튼을 눌러 넣고 뺀다.
- */
-function ChecklistEditor({
-  value,
-  onChange,
-  companies,
-  template,
-}: {
-  value: ChecklistItem[];
-  onChange: (v: ChecklistItem[]) => void;
-  /** 버튼으로 보여 줄 기업 (일경험일 때만) */
-  companies: string[];
-  /** 루틴의 체크리스트 틀: 항목 이름만 정하고 체크는 하지 않는다 */
-  template?: boolean;
-}) {
-  const [pending, setPending] = useState("");
-  const has = (t: string) => value.some((c) => companyKey(c.text) === companyKey(t));
-  const add = (raw: string) => {
-    const items = [...new Set(splitItems(raw))].filter((t) => !has(t));
-    if (items.length) onChange([...value, ...items.map((text) => ({ text, done: false }))]);
-    setPending("");
-  };
-  const patch = (i: number, p: Partial<ChecklistItem>) =>
-    onChange(value.map((c, j) => (j === i ? { ...c, ...p } : c)));
-  const done = value.filter((c) => c.done).length;
-
+/** 업무·루틴의 메모와 링크 입력칸 */
+function MemoLinkFields({ value, onChange }: { value: MemoLink; onChange: (p: Partial<MemoLink>) => void }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm font-medium text-slate-700">
-        체크리스트{" "}
-        {value.length > 0 && (
-          <span className="text-xs font-normal text-slate-500">
-            {template ? `(${value.length}개)` : `(${done}/${value.length})`}
-          </span>
-        )}
-      </p>
-      {value.length > 0 && (
-        <ul className="space-y-1">
-          {value.map((c, i) => (
-            <li key={i} className="flex items-center gap-2">
-              {!template && (
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0 accent-emerald-600"
-                  checked={c.done}
-                  onChange={(e) => patch(i, { done: e.target.checked })}
-                  aria-label={`${c.text} 완료`}
-                />
-              )}
-              <input
-                className={cn(inputCls, "py-1", c.done && "text-slate-400 line-through")}
-                value={c.text}
-                onChange={(e) => patch(i, { text: e.target.value })}
-                aria-label="항목 이름"
-              />
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((_, j) => j !== i))}
-                className="shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
-                aria-label={`${c.text} 빼기`}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <input
-        className={inputCls}
-        placeholder="항목 추가 (Enter · 쉼표로 여러 개)"
-        value={pending}
-        onChange={(e) => setPending(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            add(pending);
-          }
-        }}
-        onPaste={(e) => {
-          // 시트에서 기업 목록(여러 줄)을 복사해 붙여 넣으면 한 번에 여러 줄로
-          const text = e.clipboardData.getData("text");
-          if (/[\n\r\t]/.test(text)) {
-            e.preventDefault();
-            add(pending + text);
-          }
-        }}
-        onBlur={() => pending.trim() && add(pending)}
-      />
-      {companies.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {companies.map((c) => {
-            const on = has(c);
-            return (
-              <button
-                key={c}
-                type="button"
-                aria-pressed={on}
-                onClick={() =>
-                  on ? onChange(value.filter((x) => companyKey(x.text) !== companyKey(c))) : add(c)
-                }
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs ring-1 transition",
-                  on
-                    ? "bg-emerald-50 text-emerald-700 ring-emerald-300"
-                    : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50",
-                )}
-              >
-                {on ? "✓ " : "+ "}
-                {c}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <>
+      <Field label="메모">
+        <textarea
+          className={cn(inputCls, "resize-y")}
+          rows={3}
+          value={value.memo}
+          onChange={(e) => onChange({ memo: e.target.value })}
+        />
+      </Field>
+      <Field label="링크">
+        <input
+          type="url"
+          className={inputCls}
+          placeholder="https://"
+          value={value.link}
+          onChange={(e) => onChange({ link: e.target.value })}
+        />
+      </Field>
+    </>
   );
 }
 
@@ -396,7 +294,6 @@ function ItemForm<T>({
   isEdit,
   companies,
   titles,
-  checklistCompanies = [],
   save,
   onClose,
   onSaved,
@@ -405,11 +302,9 @@ function ItemForm<T>({
   note,
 }: {
   kind: "업무" | "일정";
-  /** checklist가 있으면(빈 배열 포함) 체크리스트 편집 칸을 보여 준다 */
+  /** memo가 있으면(빈 글 포함) 메모·링크 칸을 보여 준다 */
   initial: Draft;
   isEdit: boolean;
-  /** 일경험일 때 체크리스트에 기업 버튼으로 보여 줄 기업 */
-  checklistCompanies?: string[];
   /** 있으면 일경험일 때 기업 칸을 보여 주고, 제목 앞에 '[기업] '을 붙여 저장한다 */
   companies?: string[];
   /** 있으면 이름 칸에 자동완성과 자주 쓰는 이름 버튼을 붙인다 */
@@ -502,13 +397,7 @@ function ItemForm<T>({
           <Select value={v.category} options={CATEGORIES} onChange={changeCategory} />
         </Field>
         <DateRangeFields value={v} onChange={set} />
-        {v.checklist && (
-          <ChecklistEditor
-            value={v.checklist}
-            onChange={(checklist) => set({ checklist })}
-            companies={v.category === "일경험" ? checklistCompanies.slice(0, 12) : []}
-          />
-        )}
+        {v.memo !== undefined && <MemoLinkFields value={{ memo: v.memo, link: v.link ?? "" }} onChange={set} />}
         {error && <ErrorNote message={error} />}
         <Footer saving={saving} onClose={onClose} del={del} />
       </form>
@@ -534,7 +423,6 @@ export function TaskFormModal({
   task,
   defaultDate,
   defaultCategory,
-  companies,
   onClose,
   onSaved,
   onDeleted,
@@ -543,8 +431,6 @@ export function TaskFormModal({
   task?: Task;
   defaultDate?: string;
   defaultCategory?: Category;
-  /** 체크리스트에 버튼으로 보여 줄 기업 (일정에 쓴 기업, 많이 쓴 순) */
-  companies: string[];
   onClose: () => void;
   onSaved: (t: Task) => void;
   onDeleted?: (id: string) => void;
@@ -557,17 +443,17 @@ export function TaskFormModal({
     <ItemForm
       kind="업무"
       isEdit={!!task}
-      checklistCompanies={companies}
-      initial={{ ...draftOf(task, { category: defaultCategory, date: defaultDate }), checklist: task?.checklist ?? [] }}
+      initial={{
+        ...draftOf(task, { category: defaultCategory, date: defaultDate }),
+        memo: task?.memo ?? "",
+        link: task?.link ?? "",
+      }}
       note={task?.routineId ? "↻ 루틴에서 생긴 업무예요. 여기서 고치면 이 날만 바뀌어요." : undefined}
-      save={({ checklist = [], ...v }) => {
-        // 체크리스트가 있으면 다 체크했는지로 완료/대기를 정한다
-        const status = statusOfChecklist(checklist);
-        if (task && isVirtual(task))
-          return api.createTask({ ...taskInputOf(task), ...v, checklist, status: status ?? task.status });
+      save={({ memo = "", link = "", ...v }) => {
+        if (task && isVirtual(task)) return api.createTask({ ...taskInputOf(task), ...v, memo, link });
         return task
-          ? api.updateTask(task.id, { ...v, checklist, ...(status && { status }) })
-          : api.createTask({ ...v, checklist, status: status ?? "대기" });
+          ? api.updateTask(task.id, { ...v, memo, link })
+          : api.createTask({ ...v, memo, link, status: "대기" });
       }}
       onClose={onClose}
       onSaved={onSaved}
@@ -729,14 +615,11 @@ function nextDates(r: Routine, count: number): string[] {
 /** 루틴 목록 창. 목록에서 누르면 같은 창 안에서 수정 화면으로 바뀐다 */
 export function RoutinesModal({
   routines,
-  companies,
   onClose,
   onSaved,
   onDeleted,
 }: {
   routines: Routine[];
-  /** 일경험 체크리스트에 버튼으로 보여 줄 기업 */
-  companies: string[];
   onClose: () => void;
   onSaved: (r: Routine) => void;
   onDeleted: (id: string) => void;
@@ -746,7 +629,6 @@ export function RoutinesModal({
     return (
       <RoutineForm
         routine={editing === "new" ? undefined : editing}
-        companies={companies}
         onBack={() => setEditing(null)}
         onSaved={(r) => {
           onSaved(r);
@@ -808,13 +690,11 @@ export function RoutinesModal({
 
 function RoutineForm({
   routine,
-  companies,
   onBack,
   onSaved,
   onDeleted,
 }: {
   routine?: Routine;
-  companies: string[];
   onBack: () => void;
   onSaved: (r: Routine) => void;
   onDeleted: (id: string) => void;
@@ -826,7 +706,8 @@ function RoutineForm({
     weekdays: routine?.weekdays ?? [],
     monthDay: routine?.monthDay ?? 1,
     holidayShift: routine?.holidayShift ?? "앞",
-    checklist: routine?.checklist ?? [],
+    memo: routine?.memo ?? "",
+    link: routine?.link ?? "",
     startDate: routine?.startDate ?? todayStr(),
     endDate: routine?.endDate ?? "",
   }));
@@ -957,12 +838,7 @@ function RoutineForm({
           </Field>
         </div>
 
-        <ChecklistEditor
-          template
-          value={v.checklist.map((text) => ({ text, done: false }))}
-          onChange={(l) => set({ checklist: l.map((c) => c.text) })}
-          companies={v.category === "일경험" ? companies.slice(0, 12) : []}
-        />
+        <MemoLinkFields value={v} onChange={set} />
         {error && <ErrorNote message={error} />}
         <Footer saving={saving} onClose={onBack} del={del} />
       </form>

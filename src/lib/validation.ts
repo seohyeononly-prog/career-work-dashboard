@@ -6,6 +6,14 @@ const text = (max: number) => z.string().trim().max(max);
 
 const category = z.enum(CATEGORIES, { message: "카테고리는 일경험, 취업운영, 기타 중 하나여야 합니다." });
 
+/** 업무·루틴의 메모와 링크. 링크는 비워 둘 수 있다 */
+const memoAndLink = {
+  memo: text(2000).default(""),
+  link: text(2000)
+    .refine((u) => !u || (/^https?:\/\//i.test(u) && URL.canParse(u)), "링크는 http 또는 https 주소로 입력해 주세요.")
+    .default(""),
+};
+
 /** 시작일 + (기간이면) 종료일 */
 const dateRange = {
   startDate: z.string().regex(DATE_RE, "날짜 형식은 YYYY-MM-DD 입니다."),
@@ -24,14 +32,7 @@ export const taskInputSchema = z
     title: text(200).min(1, "업무명을 입력해 주세요."),
     category,
     status: z.enum(TASK_STATUSES, { message: "상태는 대기 또는 완료만 가능합니다." }).default("대기"),
-    // 시트에는 한 줄에 하나씩 저장하므로 항목 안의 줄바꿈은 공백으로 바꾼다
-    checklist: z
-      .array(z.object({ text: z.string().transform((s) => s.replace(/\s+/g, " ")).pipe(text(100)), done: z.boolean() }), {
-        message: "체크리스트 형식이 올바르지 않습니다.",
-      })
-      .max(50, "체크리스트는 50개까지 만들 수 있습니다.")
-      .transform((l) => l.filter((c) => c.text))
-      .default([]),
+    ...memoAndLink,
     routineId: text(50).default(""),
     ...dateRange,
   })
@@ -49,11 +50,7 @@ export const routineInputSchema = z
       .default([]),
     monthDay: z.number({ message: "매월 날짜는 숫자여야 합니다." }).int().min(1, "매월 날짜는 1~31일입니다.").max(31, "매월 날짜는 1~31일입니다.").default(1),
     holidayShift: z.enum(HOLIDAY_SHIFTS).default("앞"),
-    checklist: z
-      .array(z.string().transform((s) => s.replace(/\s+/g, " ")).pipe(text(100)))
-      .max(50, "체크리스트는 50개까지 만들 수 있습니다.")
-      .transform((l) => l.filter(Boolean))
-      .default([]),
+    ...memoAndLink,
     ...dateRange,
   })
   .refine(endNotBeforeStart, endMessage)

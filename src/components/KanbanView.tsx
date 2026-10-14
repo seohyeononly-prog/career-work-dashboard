@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
-import { byOrder, companyNames, companyOf, rangeEnd, type Category, type Routine, type Schedule, type Task, type TaskStatus } from "@/lib/types";
+import { byOrder, companyOf, rangeEnd, type Category, type Routine, type Task, type TaskStatus } from "@/lib/types";
 import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
 import { useToast } from "./Toast";
@@ -86,14 +86,12 @@ function wbsRow(t: Task) {
 export function KanbanView({
   initialTasks,
   initialRoutines,
-  schedules,
 }: {
   initialTasks: Task[];
   initialRoutines: Routine[];
-  schedules: Schedule[];
 }) {
   const today = todayStr();
-  const { tasksOn, routines, busyId, error, toggle, toggleItem, save, remove, arrange, saveRoutine, removeRoutine } =
+  const { tasksOn, routines, busyId, error, toggle, save, remove, arrange, saveRoutine, removeRoutine } =
     useTasks(initialTasks, initialRoutines);
   const [date, setDate] = useState(today);
   const [modal, setModal] = useState<{ task?: Task; category?: Category } | null>(null);
@@ -242,7 +240,6 @@ export function KanbanView({
                 busy={busyId === t.id}
                 hideCategory
                 onToggle={toggle}
-                onToggleItem={toggleItem}
                 onOpen={(task) => setModal({ task })}
               />
             </div>
@@ -375,7 +372,6 @@ export function KanbanView({
           task={modal.task}
           defaultDate={date}
           defaultCategory={modal.category}
-          companies={companyNames(schedules)}
           onClose={() => setModal(null)}
           onSaved={(t) => {
             save(t, modal.task && isVirtual(modal.task) ? modal.task.id : undefined);
@@ -392,7 +388,6 @@ export function KanbanView({
       {routinesOpen && (
         <RoutinesModal
           routines={routines}
-          companies={companyNames(schedules)}
           onClose={() => setRoutinesOpen(false)}
           onSaved={saveRoutine}
           onDeleted={removeRoutine}

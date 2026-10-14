@@ -59,7 +59,8 @@ export function routineCards(routines: Routine[], tasks: Task[], day: string, to
       status: "대기",
       startDate: day,
       endDate: "",
-      checklist: r.checklist.map((text) => ({ text, done: false })),
+      memo: r.memo,
+      link: r.link,
       order: 0,
       routineId: r.id,
       createdAt: "",
@@ -74,6 +75,7 @@ export const taskInputOf = (t: Task): TaskInput => ({
   status: t.status,
   startDate: t.startDate,
   endDate: t.endDate,
-  checklist: t.checklist,
+  memo: t.memo,
+  link: t.link,
   routineId: t.routineId,
 });

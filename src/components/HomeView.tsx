@@ -5,10 +5,10 @@ import { useState } from "react";
 import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
-import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, companyNames, rangeEnd, type LinkItem, type Routine, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, type LinkItem, type Routine, type Schedule, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
-import { ChecklistBadge, ChecklistChecks, CompleteCheckbox, DueBadge, RoutineBadge } from "./TaskItem";
+import { CompleteCheckbox, DueBadge, MemoLink, RoutineBadge } from "./TaskItem";
 import { CATEGORY_STYLE, Card, CategoryBadge, Empty, ErrorNote, PageHeader, cn } from "./ui";
 
 // 마감 기준은 업무의 마지막 날(기간 업무는 종료일)
@@ -25,7 +25,7 @@ export function HomeView({
   schedules: Schedule[];
   links: LinkItem[];
 }) {
-  const { tasks, cardsOn, busyId, error, toggle, toggleItem, save, remove, saveRoutine } = useTasks(
+  const { tasks, cardsOn, busyId, error, toggle, save, remove, saveRoutine } = useTasks(
     initialTasks,
     initialRoutines,
   );
@@ -58,12 +58,11 @@ export function HomeView({
           <span className="mt-1 flex flex-wrap items-center gap-1">
             <CategoryBadge c={t.category} />
             {t.routineId && <RoutineBadge />}
-            <ChecklistBadge task={t} />
             <DueBadge task={t} />
             <span className="text-xs text-slate-500">{rangeLabel(t)}</span>
           </span>
         </button>
-        <ChecklistChecks task={t} onToggleItem={toggleItem} disabled={busyId === t.id} />
+        <MemoLink task={t} />
       </div>
     </li>
   );
@@ -207,7 +206,6 @@ export function HomeView({
       {editing && (
         <TaskFormModal
           task={editing}
-          companies={companyNames(schedules)}
           onClose={() => setEditing(null)}
           onSaved={(t) => {
             save(t, isVirtual(editing) ? editing.id : undefined);

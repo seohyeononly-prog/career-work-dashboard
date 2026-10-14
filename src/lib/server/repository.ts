@@ -45,7 +45,11 @@ function makeRepo<T extends { id: string }>(def: TableDef<T>, devKey: keyof DevD
     await ensureSheets(ALL_TABLES);
     return readAll(def);
   }
-  const readCached = unstable_cache(readFresh, [tag], { tags: [tag], revalidate: READ_CACHE_SECONDS });
+  // 키에 열 구성을 넣어, 열을 바꾸면(예: 체크리스트 → 메모·링크) 예전 형식으로 저장된 캐시를 쓰지 않는다
+  const readCached = unstable_cache(readFresh, [tag, def.headers.join("|")], {
+    tags: [tag],
+    revalidate: READ_CACHE_SECONDS,
+  });
   /** 쓰기 뒤에 호출해 다음 읽기가 새 값을 가져오게 한다 */
   const invalidate = () => revalidateTag(tag, { expire: 0 });
 

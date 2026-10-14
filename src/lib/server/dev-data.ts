@@ -33,7 +33,8 @@ export function createDevData(): {
     endDate: endOffset === undefined ? "" : d(endOffset),
     order: 0,
     routineId: "",
-    checklist: [],
+    memo: "",
+    link: "",
     createdAt: now,
     updatedAt: now,
   });
@@ -52,10 +53,8 @@ export function createDevData(): {
     task(11, "기업 멘토링 일정 확정", "일경험", "대기", 6),
     {
       ...task(12, "면접평가표 세팅", "일경험", "대기", 1),
-      checklist: [
-        { text: "한빛소프트", done: true },
-        { text: "그린랩스", done: false },
-      ],
+      memo: "한빛소프트 완료\n그린랩스 평가표 회신 대기",
+      link: "https://docs.google.com/spreadsheets/",
     },
   ];
 
@@ -148,7 +147,8 @@ export function createDevData(): {
       weekdays: [],
       monthDay: 1,
       holidayShift: "앞",
-      checklist: [],
+      memo: "",
+      link: "",
       startDate: d(-30),
       endDate: "",
       skipDates: [],
@@ -161,7 +161,8 @@ export function createDevData(): {
       weekdays: [1, 3],
       monthDay: 1,
       holidayShift: "앞",
-      checklist: ["한빛소프트", "그린랩스"],
+      memo: "한빛소프트, 그린랩스 현황 공유",
+      link: "",
       startDate: d(-30),
       endDate: "",
       skipDates: [],
@@ -174,7 +175,8 @@ export function createDevData(): {
       weekdays: [],
       monthDay: 10,
       holidayShift: "앞",
-      checklist: [],
+      memo: "",
+      link: "",
       startDate: d(-30),
       endDate: "",
       skipDates: [],
