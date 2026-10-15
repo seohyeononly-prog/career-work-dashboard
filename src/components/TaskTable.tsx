@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { diffDays, shortDate, weekdayOf } from "@/lib/date";
-import { rangeEnd, type Category, type Task, type TaskInput } from "@/lib/types";
+import { rangeEnd, type Category, type Routine, type Task, type TaskInput } from "@/lib/types";
 import { WBS_OWNER, WBS_SECTION, wbsFields } from "@/lib/wbs";
 import { Button, cn } from "./ui";
 
@@ -29,7 +29,8 @@ const START_COL = 7;
 const END_COL = 8;
 const LAST_COL = COLUMNS.length - 1;
 
-type Row = { kind: "group"; label: string; count: number } | { kind: "task"; task: Task };
+/** tag: 구분 칸에 대신 쓸 이름 (합친 평일 루틴) */
+type Row = { kind: "group"; label: string; count: number } | { kind: "task"; task: Task; tag?: string };
 type Cell = [row: number, col: number];
 type Selection = { anchor: Cell; focus: Cell };
 
@@ -45,7 +46,7 @@ function cellValues(row: Row, today: string): string[] {
   const end = rangeEnd(t);
   const done = t.status === "완료";
   return [
-    t.routineId ? `루틴(${weekdayOf(t.startDate)})` : w.group,
+    row.tag ?? (t.routineId ? `루틴(${weekdayOf(t.startDate)})` : w.group),
     WBS_OWNER,
     w.org,
     w.type,
@@ -68,6 +69,7 @@ function cellValues(row: Row, today: string): string[] {
  */
 export function TaskTable({
   tasks,
+  routines,
   today,
   hideDone,
   busyId,
@@ -78,6 +80,8 @@ export function TaskTable({
 }: {
   /** 표에 넣을 업무 (저장된 업무 + 앞으로 일주일의 루틴 카드) */
   tasks: Task[];
+  /** 평일 루틴을 한 줄로 합치는 데 쓴다 */
+  routines: Routine[];
   today: string;
   hideDone: boolean;
   busyId: string | null;
@@ -96,16 +100,28 @@ export function TaskTable({
     return () => window.removeEventListener("mouseup", stop);
   }, []);
 
-  const shown = tasks.filter((t) => !(hideDone && t.status === "완료"));
   const byDate = (a: Task, b: Task) =>
     a.startDate.localeCompare(b.startDate) || rangeEnd(a).localeCompare(rangeEnd(b)) || a.title.localeCompare(b.title, "ko");
+  // 평일 루틴은 날마다 같은 줄이라 가장 가까운 날 하나만 남긴다
+  const weekdayRoutines = new Set(routines.filter((x) => x.repeat === "평일").map((x) => x.id));
+  const seenWeekday = new Set<string>();
+  const shown = tasks
+    .filter((t) => !(hideDone && t.status === "완료"))
+    .sort(byDate)
+    .filter((t) => {
+      if (!weekdayRoutines.has(t.routineId)) return true;
+      if (seenWeekday.has(t.routineId)) return false;
+      seenWeekday.add(t.routineId);
+      return true;
+    });
+  const tagOf = (t: Task) => (weekdayRoutines.has(t.routineId) ? "루틴(평일)" : undefined);
   const groups = [
     { label: "루틴", list: shown.filter((t) => t.routineId) },
     ...GROUPS.map((c) => ({ label: WBS_SECTION[c], list: shown.filter((t) => !t.routineId && t.category === c) })),
   ];
   const rows: Row[] = groups.flatMap((g) => [
     { kind: "group", label: g.label, count: g.list.length } as const,
-    ...g.list.sort(byDate).map((task) => ({ kind: "task", task }) as const),
+    ...g.list.map((task) => ({ kind: "task", task, tag: tagOf(task) }) as const),
   ]);
 
   // 행이 줄어 선택이 표 밖을 가리키면 버린다
@@ -173,13 +189,14 @@ export function TaskTable({
     }
   };
 
-  const renderTaskRow = (t: Task, r: number) => {
+  const renderTaskRow = (row: Extract<Row, { kind: "task" }>, r: number) => {
+    const t = row.task;
     const end = rangeEnd(t);
     const left = diffDays(today, end);
     const done = t.status === "완료";
     const late = !done && left < 0;
     const soon = !done && left >= 0 && left <= 1;
-    const values = cellValues({ kind: "task", task: t }, today);
+    const values = cellValues(row, today);
 
     const content = (c: number): ReactNode => {
       if (c === START_COL || c === END_COL) {
@@ -290,7 +307,7 @@ export function TaskTable({
           <tbody>
             {rows.map((row, r) =>
               row.kind === "task" ? (
-                renderTaskRow(row.task, r)
+                renderTaskRow(row, r)
               ) : (
                 <tr key={`g-${row.label}`}>
                   <td

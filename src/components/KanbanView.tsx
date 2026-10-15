@@ -378,6 +378,7 @@ export function KanbanView({
 
       <TaskTable
         tasks={tableTasks}
+        routines={routines}
         today={today}
         hideDone={hideDone}
         busyId={busyId}
