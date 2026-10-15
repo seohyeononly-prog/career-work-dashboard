@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { addDays, rangeLabel, shortDate, startOfWeek, todayStr, weekdayOf } from "@/lib/date";
+import { rangeLabel, shortDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
-import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, type LinkItem, type Routine, type Schedule, type Task } from "@/lib/types";
+import { CATEGORIES, LINK_CATEGORIES, TASK_STATUSES, rangeEnd, type LinkItem, type Routine, type Task } from "@/lib/types";
 import { TaskFormModal } from "./forms";
 import { ServiceMark } from "./ServiceMark";
 import { CompleteCheckbox, DueBadge, MemoLink, RoutineBadge } from "./TaskItem";
@@ -17,12 +17,10 @@ const byDue = (a: Task, b: Task) => rangeEnd(a).localeCompare(rangeEnd(b));
 export function HomeView({
   initialTasks,
   initialRoutines,
-  schedules,
   links,
 }: {
   initialTasks: Task[];
   initialRoutines: Routine[];
-  schedules: Schedule[];
   links: LinkItem[];
 }) {
   const { tasks, cardsOn, busyId, error, toggle, save, remove, saveRoutine } = useTasks(
@@ -38,12 +36,6 @@ export function HomeView({
   const open = tasks.filter((t) => t.status !== "완료");
   const overdue = open.filter((t) => t.startDate && rangeEnd(t) < today).sort(byDue);
   const upcoming = open.filter((t) => !t.startDate || rangeEnd(t) > today).sort(byDue);
-
-  const weekStart = startOfWeek(today);
-  const weekEnd = addDays(weekStart, 6);
-  const weekSchedules = schedules
-    .filter((s) => s.startDate <= weekEnd && rangeEnd(s) >= weekStart)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   const favorites = links.filter((l) => l.favorite);
 
@@ -105,39 +97,8 @@ export function HomeView({
           </div>
         </Card>
 
-        <Card
-          title={`이번 주 일정 (${shortDate(weekStart)} ~ ${shortDate(weekEnd)})`}
-          className="lg:col-span-2"
-          action={<Link href="/calendar?view=schedule" className="text-xs text-indigo-600 hover:underline">캘린더</Link>}
-        >
-          {weekSchedules.length ? (
-            <ul className="divide-y divide-slate-100">
-              {weekSchedules.map((s) => {
-                const d = s.startDate;
-                return (
-                  <li key={s.id} className="flex items-start gap-3 py-2">
-                    <div className={cn("w-14 shrink-0 text-center text-xs", d === today ? "font-bold text-indigo-600" : "text-slate-500")}>
-                      <div>{Number(d.slice(8))}일</div>
-                      <div>({weekdayOf(d)})</div>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium break-words">{s.title}</p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                        <CategoryBadge c={s.category} />
-                        {s.endDate && <span>{rangeLabel(s)}</span>}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <Empty>이번 주 일정이 없습니다.</Empty>
-          )}
-        </Card>
-
-        <Card title="카테고리별 진행 상황">
-          <div className="space-y-4">
+        <Card title="카테고리별 진행 상황" className="lg:col-span-3">
+          <div className="grid gap-4 md:grid-cols-3">
             {/* 기타는 해당 업무가 있을 때만 표시 */}
             {CATEGORIES.filter((c) => c !== "기타" || tasks.some((t) => t.category === c)).map((c) => {
               const list = tasks.filter((t) => t.category === c);

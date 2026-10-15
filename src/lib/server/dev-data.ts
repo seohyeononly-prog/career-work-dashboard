@@ -1,6 +1,6 @@
 import "server-only";
 import { addDays, nowStr, todayStr } from "../date";
-import type { LinkItem, Routine, Schedule, Task } from "../types";
+import type { LinkItem, Routine, Task } from "../types";
 
 // 개발용 예시 데이터. Google Sheets가 연결되지 않았을 때만 사용되며
 // 서버 메모리에만 있으므로 서버를 재시작하면 초기화된다.
@@ -8,7 +8,6 @@ import type { LinkItem, Routine, Schedule, Task } from "../types";
 
 export function createDevData(): {
   tasks: Task[];
-  schedules: Schedule[];
   links: LinkItem[];
   routines: Routine[];
 } {
@@ -16,7 +15,7 @@ export function createDevData(): {
   const d = (n: number) => addDays(t, n);
   const now = nowStr();
 
-  // endOffset을 주면 기간 업무/일정
+  // endOffset을 주면 기간 업무
   const task = (
     id: number,
     title: string,
@@ -56,33 +55,6 @@ export function createDevData(): {
       memo: "한빛소프트 완료\n그린랩스 평가표 회신 대기",
       link: "https://docs.google.com/spreadsheets/",
     },
-  ];
-
-  const sch = (
-    id: number,
-    title: string,
-    category: Schedule["category"],
-    startOffset: number,
-    endOffset?: number,
-  ): Schedule => ({
-    id: `dev-schedule-${id}`,
-    title,
-    category,
-    startDate: d(startOffset),
-    endDate: endOffset === undefined ? "" : d(endOffset),
-  });
-
-  const schedules: Schedule[] = [
-    sch(1, "주간 운영 미팅", "취업운영", 0),
-    sch(2, "수료식", "취업운영", 2),
-    sch(3, "취업 특강: 이력서 작성법", "취업운영", 3),
-    sch(4, "일경험 참여기업 미팅", "일경험", 1),
-    sch(5, "일경험 운영 교육", "일경험", 4),
-    sch(6, "일경험 네트워킹 행사", "일경험", 8, 9),
-    sch(7, "[한빛소프트] 킥오프 미팅", "일경험", 0),
-    sch(8, "[한빛소프트] 중간 발표", "일경험", 5),
-    sch(9, "[그린랩스] 현장 방문", "일경험", 1),
-    sch(10, "[그린랩스] 멘토링", "일경험", 3, 4),
   ];
 
   const links: LinkItem[] = [
@@ -183,5 +155,5 @@ export function createDevData(): {
     },
   ];
 
-  return { tasks, schedules, links, routines };
+  return { tasks, links, routines };
 }

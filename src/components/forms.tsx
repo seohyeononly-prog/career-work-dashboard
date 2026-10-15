@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { api } from "@/lib/client-api";
 import { addDays, shortDate, todayStr, WEEKDAYS } from "@/lib/date";
 import { isVirtual, repeatLabel, routineOccursOn, taskInputOf } from "@/lib/routines";
@@ -10,7 +10,6 @@ import {
   HOLIDAY_SHIFTS,
   LINK_CATEGORIES,
   REPEAT_TYPES,
-  SCHEDULE_KEYWORDS,
   SERVICE_TYPES,
   type Category,
   type LinkCategory,
@@ -19,11 +18,7 @@ import {
   type LinkItem,
   type Routine,
   type RoutineInput,
-  type Schedule,
   type Task,
-  companyOf,
-  withCompany,
-  withoutCompany,
 } from "@/lib/types";
 import { useToast } from "./Toast";
 import { Button, CategoryBadge, Empty, ErrorNote, Field, Modal, Select, cn, inputCls } from "./ui";
@@ -186,84 +181,16 @@ function DateRangeFields({ value, onChange }: { value: DateRange; onChange: (v: 
   );
 }
 
-type MemoLink = { memo: string; link: string };
-
-/** 메모·링크는 업무에만 있다 */
-type Draft = { title: string; category: Category } & Partial<MemoLink> & DateRange;
-
-/** 기업명 비교용: 공백·대소문자 무시 */
-const companyKey = (c: string) => c.replace(/\s/g, "").toLowerCase();
-
-/** 입력칸(자동완성) + 골라 넣는 버튼. 기업·일정 이름에 쓴다 */
-function PickField({
-  label,
-  placeholder,
-  value,
-  options,
-  chips,
-  onChange,
-  autoFocus,
-  required,
-}: {
-  label: string;
-  placeholder?: string;
-  value: string;
-  /** 자동완성 목록 */
-  options: string[];
-  /** 버튼으로 보여 줄 값. 누른 버튼을 다시 누르면 비운다 */
-  chips: string[];
-  onChange: (c: string) => void;
-  autoFocus: boolean;
-  required?: boolean;
-}) {
-  const listId = useId();
-  return (
-    <div className="space-y-1.5">
-      <Field label={label}>
-        <input
-          className={inputCls}
-          list={listId}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          autoFocus={autoFocus}
-          required={required}
-        />
-        <datalist id={listId}>
-          {options.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-      </Field>
-      {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {chips.map((c) => {
-            const on = companyKey(c) === companyKey(value);
-            return (
-              <button
-                key={c}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onChange(on ? "" : c)}
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs ring-1 transition",
-                  on
-                    ? "bg-emerald-50 text-emerald-700 ring-emerald-300"
-                    : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50",
-                )}
-              >
-                {c}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+type TaskDraft = { title: string; category: Category; memo: string; link: string } & DateRange;
 
 /** 업무·루틴의 메모와 링크 입력칸 */
-function MemoLinkFields({ value, onChange }: { value: MemoLink; onChange: (p: Partial<MemoLink>) => void }) {
+function MemoLinkFields({
+  value,
+  onChange,
+}: {
+  value: { memo: string; link: string };
+  onChange: (p: { memo?: string; link?: string }) => void;
+}) {
   return (
     <>
       <Field label="메모">
@@ -287,137 +214,6 @@ function MemoLinkFields({ value, onChange }: { value: MemoLink; onChange: (p: Pa
   );
 }
 
-/** 업무·일정 공용 입력 폼: 이름, 카테고리, 날짜(기간) */
-function ItemForm<T>({
-  kind,
-  initial,
-  isEdit,
-  companies,
-  titles,
-  save,
-  onClose,
-  onSaved,
-  remove,
-  deleteText,
-  note,
-}: {
-  kind: "업무" | "일정";
-  /** memo가 있으면(빈 글 포함) 메모·링크 칸을 보여 준다 */
-  initial: Draft;
-  isEdit: boolean;
-  /** 있으면 일경험일 때 기업 칸을 보여 주고, 제목 앞에 '[기업] '을 붙여 저장한다 */
-  companies?: string[];
-  /** 있으면 이름 칸에 자동완성과 자주 쓰는 이름 버튼을 붙인다 */
-  titles?: string[];
-  save: (v: Draft) => Promise<T>;
-  onClose: () => void;
-  onSaved: (v: T) => void;
-  /** 있으면 삭제 버튼을 보여준다 */
-  remove?: () => Promise<void>;
-  /** 삭제 버튼 대신 다른 동작(예: 이 날 건너뛰기)일 때 문구 */
-  deleteText?: DeleteText;
-  /** 제목 위에 보여 줄 안내 */
-  note?: string;
-}) {
-  const hasCompany = (c: Category) => !!companies && c === "일경험";
-  // 일경험 일정은 제목의 '[기업]'을 기업 칸으로 떼어 낸다
-  const [company, setCompany] = useState(() => (hasCompany(initial.category) ? companyOf(initial.title) : ""));
-  const [v, setV] = useState<Draft>(() =>
-    hasCompany(initial.category) ? { ...initial, title: withoutCompany(initial.title) } : initial,
-  );
-  const set = (p: Partial<Draft>) => setV((s) => ({ ...s, ...p }));
-
-  /** 카테고리를 바꾸면 기업을 제목에 합치거나 제목에서 떼어 낸다 */
-  const changeCategory = (category: Category) => {
-    if (hasCompany(v.category) && !hasCompany(category)) {
-      set({ category, title: withCompany(company.trim(), v.title) });
-      setCompany("");
-    } else if (!hasCompany(v.category) && hasCompany(category)) {
-      const c = companyOf(v.title);
-      set({ category, title: c ? withoutCompany(v.title) : v.title });
-      setCompany(c);
-    } else set({ category });
-  };
-
-  /** 저장할 기업명: 대괄호를 빼고, 이미 있는 기업과 공백·대소문자만 다르면 그 이름으로 맞춘다 */
-  const savedCompany = () => {
-    const c = company.replace(/[[\]]/g, "").trim();
-    return companies?.find((x) => companyKey(x) === companyKey(c)) ?? c;
-  };
-  const { saving, error: saveError, submit } = useSubmit(
-    () => save(hasCompany(v.category) ? { ...v, title: withCompany(savedCompany(), v.title.trim()) } : v),
-    onSaved,
-  );
-  const { error: deleteError, del } = useDelete(
-    `'${initial.title}' ${kind}${kind === "업무" ? "를" : "을"}`,
-    remove,
-    deleteText,
-  );
-  const error = saveError || deleteError;
-  // 새 일경험 일정인데 기업이 비어 있으면 기업 칸부터
-  const focusCompany = hasCompany(v.category) && !isEdit && !company;
-
-  return (
-    <Modal title={isEdit ? `${kind} 수정` : `새 ${kind}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        {note && <p className="rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-700">{note}</p>}
-        {companies && hasCompany(v.category) && (
-          <PickField
-            label="기업"
-            placeholder="기업명 (없으면 비워 두세요)"
-            value={company}
-            options={companies}
-            chips={companies.slice(0, 8)}
-            onChange={setCompany}
-            autoFocus={focusCompany}
-          />
-        )}
-        {titles ? (
-          <PickField
-            label={`${kind}명`}
-            value={v.title}
-            options={titles}
-            chips={SCHEDULE_KEYWORDS}
-            onChange={(title) => set({ title })}
-            autoFocus={!focusCompany}
-            required
-          />
-        ) : (
-          <Field label={`${kind}명`}>
-            <input
-              className={inputCls}
-              value={v.title}
-              onChange={(e) => set({ title: e.target.value })}
-              required
-              autoFocus={!focusCompany}
-            />
-          </Field>
-        )}
-        <Field label="카테고리">
-          <Select value={v.category} options={CATEGORIES} onChange={changeCategory} />
-        </Field>
-        <DateRangeFields value={v} onChange={set} />
-        {v.memo !== undefined && <MemoLinkFields value={{ memo: v.memo, link: v.link ?? "" }} onChange={set} />}
-        {error && <ErrorNote message={error} />}
-        <Footer saving={saving} onClose={onClose} del={del} />
-      </form>
-    </Modal>
-  );
-}
-
-const draftOf = (
-  item: Draft | undefined,
-  defaults: { title?: string; category?: Category; date?: string },
-): Draft =>
-  item
-    ? { title: item.title, category: item.category, startDate: item.startDate, endDate: item.endDate }
-    : {
-        title: defaults.title ?? "",
-        category: defaults.category ?? DEFAULT_CATEGORY,
-        startDate: defaults.date ?? todayStr(),
-        endDate: "",
-      };
-
 // ---------- 업무 ----------
 export function TaskFormModal({
   task,
@@ -437,87 +233,58 @@ export function TaskFormModal({
   /** 루틴 업무를 '이 날 건너뛰기'해서 루틴의 건너뛴 날짜가 바뀌었을 때 */
   onRoutineSaved?: (r: Routine) => void;
 }) {
+  const [v, setV] = useState<TaskDraft>(() => ({
+    title: task?.title ?? "",
+    category: task?.category ?? defaultCategory ?? DEFAULT_CATEGORY,
+    startDate: task?.startDate ?? defaultDate ?? todayStr(),
+    endDate: task?.endDate ?? "",
+    memo: task?.memo ?? "",
+    link: task?.link ?? "",
+  }));
+  const set = (p: Partial<TaskDraft>) => setV((s) => ({ ...s, ...p }));
   // 오늘 이후의 루틴 업무는 지우는 대신 그날만 건너뛴다 (지우기만 하면 루틴 카드가 다시 생기므로)
   const skips = !!task?.routineId && task.startDate >= todayStr();
-  return (
-    <ItemForm
-      kind="업무"
-      isEdit={!!task}
-      initial={{
-        ...draftOf(task, { category: defaultCategory, date: defaultDate }),
-        memo: task?.memo ?? "",
-        link: task?.link ?? "",
-      }}
-      note={task?.routineId ? "↻ 루틴에서 생긴 업무예요. 여기서 고치면 이 날만 바뀌어요." : undefined}
-      save={({ memo = "", link = "", ...v }) => {
-        if (task && isVirtual(task)) return api.createTask({ ...taskInputOf(task), ...v, memo, link });
-        return task
-          ? api.updateTask(task.id, { ...v, memo, link })
-          : api.createTask({ ...v, memo, link, status: "대기" });
-      }}
-      onClose={onClose}
-      onSaved={onSaved}
-      deleteText={skips ? SKIP_TEXT : undefined}
-      remove={
-        task && onDeleted
-          ? async () => {
-              if (!isVirtual(task)) await api.deleteTask(task.id);
-              if (skips) {
-                const r = await api.skipRoutine(task.routineId, task.startDate);
-                if (r) onRoutineSaved?.(r);
-              }
-              onDeleted(task.id);
-            }
-          : undefined
-      }
-    />
-  );
-}
 
-// ---------- 일정 ----------
-export function ScheduleFormModal({
-  schedule,
-  defaultDate,
-  defaultTitle,
-  defaultCategory,
-  companies,
-  titles,
-  onClose,
-  onSaved,
-  onDeleted,
-}: {
-  schedule?: Schedule;
-  defaultDate?: string;
-  /** 기업별 보기에서 추가할 때 '[기업] '을 미리 채운다 */
-  defaultTitle?: string;
-  defaultCategory?: Category;
-  /** 자동완성·버튼으로 보여 줄 기업 목록 (많이 쓴 순) */
-  companies: string[];
-  /** 자동완성으로 보여 줄 일정 이름 ('[기업]' 뺀 제목, 많이 쓴 순) */
-  titles: string[];
-  onClose: () => void;
-  onSaved: (s: Schedule) => void;
-  onDeleted?: (id: string) => void;
-}) {
+  const { saving, error: saveError, submit } = useSubmit(() => {
+    if (task && isVirtual(task)) return api.createTask({ ...taskInputOf(task), ...v });
+    return task ? api.updateTask(task.id, v) : api.createTask({ ...v, status: "대기" });
+  }, onSaved);
+  const { error: deleteError, del } = useDelete(
+    `'${task?.title}' 업무를`,
+    task && onDeleted
+      ? async () => {
+          if (!isVirtual(task)) await api.deleteTask(task.id);
+          if (skips) {
+            const r = await api.skipRoutine(task.routineId, task.startDate);
+            if (r) onRoutineSaved?.(r);
+          }
+          onDeleted(task.id);
+        }
+      : undefined,
+    skips ? SKIP_TEXT : undefined,
+  );
+  const error = saveError || deleteError;
+
   return (
-    <ItemForm
-      kind="일정"
-      isEdit={!!schedule}
-      companies={companies}
-      titles={titles}
-      initial={draftOf(schedule, { title: defaultTitle, category: defaultCategory, date: defaultDate })}
-      save={(v) => (schedule ? api.updateSchedule(schedule.id, v) : api.createSchedule(v))}
-      onClose={onClose}
-      onSaved={onSaved}
-      remove={
-        schedule && onDeleted
-          ? async () => {
-              await api.deleteSchedule(schedule.id);
-              onDeleted(schedule.id);
-            }
-          : undefined
-      }
-    />
+    <Modal title={task ? "업무 수정" : "새 업무"} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {task?.routineId && (
+          <p className="rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-700">
+            ↻ 루틴에서 생긴 업무예요. 여기서 고치면 이 날만 바뀌어요.
+          </p>
+        )}
+        <Field label="업무명">
+          <input className={inputCls} value={v.title} onChange={(e) => set({ title: e.target.value })} required autoFocus />
+        </Field>
+        <Field label="카테고리">
+          <Select value={v.category} options={CATEGORIES} onChange={(category) => set({ category })} />
+        </Field>
+        <DateRangeFields value={v} onChange={set} />
+        <MemoLinkFields value={v} onChange={set} />
+        {error && <ErrorNote message={error} />}
+        <Footer saving={saving} onClose={onClose} del={del} />
+      </form>
+    </Modal>
   );
 }
 

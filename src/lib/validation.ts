@@ -56,15 +56,6 @@ export const routineInputSchema = z
   .refine(endNotBeforeStart, endMessage)
   .refine((r) => r.repeat !== "요일" || r.weekdays.length > 0, { message: "요일을 하나 이상 골라 주세요.", path: ["weekdays"] });
 
-export const scheduleInputSchema = z
-  .object({
-    title: text(200).min(1, "일정명을 입력해 주세요."),
-    category,
-    ...dateRange,
-  })
-  .refine(endNotBeforeStart, endMessage)
-  .transform(collapseSameDay);
-
 export const linkInputSchema = z.object({
   name: text(200).min(1, "링크명을 입력해 주세요."),
   url: z

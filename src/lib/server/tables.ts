@@ -10,7 +10,6 @@ import {
   type DateRange,
   type LinkItem,
   type Routine,
-  type Schedule,
   type Task,
 } from "../types";
 
@@ -131,21 +130,6 @@ export const RoutinesTable: TableDef<Routine> = {
           endDate: normDate(r[9]) >= normDate(r[8]) ? normDate(r[9]) : "",
           skipDates: datesFromCell(r[10]),
           link: (r[11] ?? "").trim(),
-        }
-      : null,
-};
-
-export const SchedulesTable: TableDef<Schedule> = {
-  sheet: "Schedules",
-  headers: ["일정 ID", "일정명", "카테고리", "시작일", "종료일"],
-  toRow: (s) => [s.id, s.title, s.category, s.startDate, s.endDate],
-  fromRow: (r) =>
-    r[0]?.trim()
-      ? {
-          id: r[0].trim(),
-          title: r[1] ?? "",
-          category: oneOf(CATEGORIES, r[2], "취업운영"),
-          ...readRange(r[3], r[4]),
         }
       : null,
 };

@@ -1,5 +1,5 @@
 // 브라우저에서 호출하는 API 래퍼. 자격 증명 없이 우리 서버의 /api 라우트만 호출한다.
-import type { LinkInput, LinkItem, Routine, RoutineInput, Schedule, ScheduleInput, Task, TaskInput } from "./types";
+import type { LinkInput, LinkItem, Routine, RoutineInput, Task, TaskInput } from "./types";
 
 async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -18,11 +18,6 @@ export const api = {
     request<Task>(`/api/tasks/${encodeURIComponent(id)}`, "PATCH", v),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${encodeURIComponent(id)}`, "DELETE"),
   reorderTasks: (ids: string[]) => request<{ ok: true }>("/api/tasks/order", "PUT", { ids }),
-  createSchedule: (v: ScheduleInput) => request<Schedule>("/api/schedules", "POST", v),
-  updateSchedule: (id: string, v: Partial<ScheduleInput>) =>
-    request<Schedule>(`/api/schedules/${encodeURIComponent(id)}`, "PATCH", v),
-  deleteSchedule: (id: string) =>
-    request<{ ok: true }>(`/api/schedules/${encodeURIComponent(id)}`, "DELETE"),
   createLink: (v: LinkInput) => request<LinkItem>("/api/links", "POST", v),
   updateLink: (id: string, v: Partial<LinkInput>) =>
     request<LinkItem>(`/api/links/${encodeURIComponent(id)}`, "PATCH", v),
