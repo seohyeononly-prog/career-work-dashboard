@@ -201,7 +201,6 @@ export function TaskTable({
     const content = (c: number): ReactNode => {
       if (c === START_COL || c === END_COL) {
         const ymd = c === START_COL ? t.startDate : end;
-        if (c === START_COL && t.routineId) return shortDate(ymd);
         return (
           <>
             {shortDate(ymd)}
@@ -252,8 +251,8 @@ export function TaskTable({
     return (
       <tr key={t.id} className={cn(soon && "bg-amber-50 font-semibold", done && "text-slate-400")}>
         {COLUMNS.map((col, c) => {
-          // 루틴 업무는 시작일이 곧 루틴이 생기는 날이라 옮기지 않는다 (옮기면 그날 루틴 카드가 다시 생김)
-          const isDate = c === END_COL || (c === START_COL && !t.routineId);
+          // 루틴 업무 시작일을 옮기면 원래 날은 루틴에서 건너뛴다 (useTasks.patchTask)
+          const isDate = c === START_COL || c === END_COL;
           const todayCell = (c === START_COL || c === END_COL) && (c === START_COL ? t.startDate : end) === today;
           return (
             <td

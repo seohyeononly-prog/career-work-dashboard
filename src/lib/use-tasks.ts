@@ -34,15 +34,35 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
   const rollback = (task: Task) =>
     setTasks((l) => (isVirtual(task) ? l.filter((t) => t.id !== task.id) : upsert(l, task)));
 
-  /** 한 업무의 값을 바꿔 저장한다. 가상 카드는 바로 화면 목록에 넣어 두고 저장되면 바꿔 끼운다 */
+  /**
+   * 한 업무의 값을 바꿔 저장한다. 가상 카드는 바로 화면 목록에 넣어 두고 저장되면 바꿔 끼운다.
+   * 오늘 이후의 루틴 업무 시작일을 옮기면 원래 날은 루틴에서 건너뛴다 (그날 루틴 카드가 다시 생기지 않게).
+   */
   const patchTask = async (task: Task, patch: Partial<TaskInput>) => {
     setError("");
     setBusyId(task.id);
+    const from = task.startDate;
+    const skip = !!task.routineId && !!patch.startDate && patch.startDate !== from && from >= today;
+    const prevRoutines = routines;
     setTasks((l) => upsert(l, { ...task, ...patch }));
+    if (skip)
+      setRoutines((l) => l.map((r) => (r.id === task.routineId ? { ...r, skipDates: [...r.skipDates, from] } : r)));
     try {
       settle(task, await persist(task, patch));
     } catch (e) {
       rollback(task);
+      if (skip) setRoutines(prevRoutines);
+      setError((e as Error).message);
+      setBusyId(null);
+      return;
+    }
+    try {
+      if (skip) {
+        const r = await api.skipRoutine(task.routineId, from);
+        if (r) saveRoutine(r);
+      }
+    } catch (e) {
+      setRoutines(prevRoutines);
       setError((e as Error).message);
     } finally {
       setBusyId(null);
