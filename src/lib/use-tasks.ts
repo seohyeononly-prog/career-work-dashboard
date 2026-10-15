@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, upsert } from "./client-api";
 import { todayStr } from "./date";
 import { isExpiredRoutine, isVirtual, routineCards, taskInputOf } from "./routines";
@@ -25,12 +25,26 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
   /** 그날의 업무: 저장된 업무 + 루틴 카드 */
   const tasksOn = (day: string) => [...tasks.filter((t) => covers(t, day)), ...cardsOn(day)];
 
+  /**
+   * 가상 카드 ID → 그 카드로 업무를 만드는 중인 요청.
+   * 저장이 끝나기 전에 같은 카드를 또 고치면(날짜 칸 연속 입력 등) 새로 만들지 않고 만든 업무를 고친다.
+   */
+  const creating = useRef(new Map<string, Promise<Task>>());
+  const createOnce = (task: Task, patch: Partial<TaskInput> = {}) => {
+    const pending = creating.current.get(task.id);
+    if (pending) return pending.then((saved) => (Object.keys(patch).length ? api.updateTask(saved.id, patch) : saved));
+    const p = api.createTask({ ...taskInputOf(task), ...patch });
+    creating.current.set(task.id, p);
+    const done = () => creating.current.delete(task.id);
+    p.then(done, done);
+    return p;
+  };
   /** 저장된 업무는 고치고, 가상 카드는 바뀐 값으로 새 업무를 만든다 */
   const persist = (task: Task, patch: Partial<TaskInput>) =>
-    isVirtual(task) ? api.createTask({ ...taskInputOf(task), ...patch }) : api.updateTask(task.id, patch);
+    isVirtual(task) ? createOnce(task, patch) : api.updateTask(task.id, patch);
   /** 저장 결과로 바꿔 넣는다. 가상 카드였으면 가상 ID 자리를 진짜 업무로 */
   const settle = (task: Task, saved: Task) =>
-    setTasks((l) => (isVirtual(task) ? [...l.filter((t) => t.id !== task.id), saved] : upsert(l, saved)));
+    setTasks((l) => upsert(isVirtual(task) ? l.filter((t) => t.id !== task.id) : l, saved));
   const rollback = (task: Task) =>
     setTasks((l) => (isVirtual(task) ? l.filter((t) => t.id !== task.id) : upsert(l, task)));
 
@@ -105,7 +119,7 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
     try {
       if (!isVirtual(moved) && Object.keys(patch).length) await api.updateTask(moved.id, patch);
       const ids = new Map<string, string>();
-      for (const t of ordered.filter((x) => toSave.has(x.id))) ids.set(t.id, (await api.createTask(taskInputOf(t))).id);
+      for (const t of ordered.filter((x) => toSave.has(x.id))) ids.set(t.id, (await createOnce(t)).id);
       const realIds = ordered.map((t) => ids.get(t.id) ?? t.id);
       await api.reorderTasks(realIds);
       setTasks((l) => l.map((t) => (ids.has(t.id) ? { ...t, id: ids.get(t.id)! } : t)));
