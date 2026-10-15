@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
@@ -30,6 +30,9 @@ const WBS_GID = "1496926969";
 const WBS_URL = `${WBS_SHEET}?gid=${WBS_GID}#gid=${WBS_GID}&range=`;
 /** 칸반 아래에 넣는 시트. 메뉴·도구 모음을 숨기고(rm=minimal) 그 셀로 이동한다 */
 const wbsEmbedUrl = (cell: string) => `${WBS_SHEET}?gid=${WBS_GID}&rm=minimal#gid=${WBS_GID}&range=${cell}`;
+const lockPageScroll = (on: boolean) => {
+  document.documentElement.style.overflow = on ? "hidden" : "";
+};
 const WBS_DEFAULT_CELL = "A60";
 const WBS_CELL_KEY = "wbs-cell";
 /** 완료 업무 숨기기 (localStorage, 켜면 "1") */
@@ -97,6 +100,8 @@ export function KanbanView({
   const [routinesOpen, setRoutinesOpen] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const toast = useToast();
+  // 시트 위에 있는 채로 다른 화면으로 넘어가도 페이지 스크롤 잠금을 푼다
+  useEffect(() => () => lockPageScroll(false), []);
 
   // WBS 셀 위치는 이 브라우저에 기억해 둔다 (입력 전에는 저장된 값을 보여 줌)
   const savedWbsCell = useSyncExternalStore(noSubscribe, readWbsCell, () => WBS_DEFAULT_CELL);
@@ -381,11 +386,14 @@ export function KanbanView({
             {embedCell}부터 보여요 · 셀 위치를 바꾸고 Enter를 누르면 다시 불러와요
           </span>
         </div>
-        {/* 이 브라우저에서 구글에 로그인돼 있고 시트 권한이 있어야 보인다 */}
+        {/* 이 브라우저에서 구글에 로그인돼 있고 시트 권한이 있어야 보인다.
+            시트는 스크롤을 직접 처리해서 페이지까지 같이 스크롤되므로, 마우스가 시트 위에 있는 동안 페이지 스크롤을 잠근다 */}
         <iframe
           key={embedCell}
           src={wbsEmbedUrl(embedCell)}
           title="WBS 시트"
+          onMouseEnter={() => lockPageScroll(true)}
+          onMouseLeave={() => lockPageScroll(false)}
           className="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"
         />
       </section>

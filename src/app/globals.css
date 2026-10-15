@@ -16,6 +16,11 @@
   .animate-toast { animation: none; }
 }
 
+/* 시트 위에서 페이지 스크롤을 잠가도(overflow: hidden) 스크롤바 자리가 남아 화면이 밀리지 않게 */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-sans);
 }
