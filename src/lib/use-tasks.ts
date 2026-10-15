@@ -108,6 +108,7 @@ export function useTasks(initial: Task[], initialRoutines: Routine[] = []) {
     busyId,
     error,
     toggle,
+    patchTask,
     changeStatus,
     save,
     remove,

@@ -4,9 +4,11 @@ import { useState, useSyncExternalStore } from "react";
 import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
-import { byOrder, companyOf, rangeEnd, type Category, type Routine, type Task, type TaskStatus } from "@/lib/types";
+import { byOrder, rangeEnd, type Category, type Routine, type Task, type TaskStatus } from "@/lib/types";
+import { WBS_OWNER, WBS_SECTION, wbsFields } from "@/lib/wbs";
 import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
+import { TaskTable } from "./TaskTable";
 import { useToast } from "./Toast";
 import { Button, CATEGORY_STYLE, Empty, ErrorNote, cn, inputCls } from "./ui";
 
@@ -66,20 +68,13 @@ function readHideDone() {
 /** 마감보고 한 줄: 본부명을 앞에 붙이고, 기타 카테고리는 카테고리명을 뺀다 */
 const reportLine = (t: Task) => `[교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`;
 
-/** WBS 시트의 구역 이름. 기타 열은 AI리더 구역이다 */
-const WBS_SECTION: Record<Category, string> = { 취업운영: "취업운영", 일경험: "일경험", 기타: "AI리더" };
-
 /**
  * WBS 한 행(B~J열)을 탭으로 나눈 줄. 시트에 붙이면 칸마다 나뉘어 들어간다.
  * 구분(기업명 또는 구역) · 담당자 · 본부 · 유형 · 업무명 · G·H(빈칸) · 시작일 · 종료일
  */
 function wbsRow(t: Task) {
-  const section = WBS_SECTION[t.category];
-  const title = t.title.replace(/\s+/g, " ").trim();
-  const org = t.category === "일경험" ? "일경험" : /주간\s*미팅/.test(title) ? "B2G교육사업본부" : "오즈코딩스쿨";
-  const type = /회의|미팅/.test(title) ? "미팅" : "운영";
-  const name = title.startsWith(section) ? title : `${section} ${title}`;
-  return [companyOf(title) || section, "박서현", org, type, name, "", "", t.startDate, rangeEnd(t)].join("\t");
+  const w = wbsFields(t);
+  return [w.group, WBS_OWNER, w.org, w.type, w.name, "", "", t.startDate, rangeEnd(t)].join("\t");
 }
 
 /** 칸반보드: 취업운영 / 일경험 / 기타 열, 열마다 대기 위·완료 아래 */
@@ -91,7 +86,7 @@ export function KanbanView({
   initialRoutines: Routine[];
 }) {
   const today = todayStr();
-  const { tasksOn, routines, busyId, error, toggle, save, remove, arrange, saveRoutine, removeRoutine } =
+  const { tasks, tasksOn, cardsOn, routines, busyId, error, toggle, patchTask, save, remove, arrange, saveRoutine, removeRoutine } =
     useTasks(initialTasks, initialRoutines);
   const [date, setDate] = useState(today);
   const [modal, setModal] = useState<{ task?: Task; category?: Category } | null>(null);
@@ -176,6 +171,20 @@ export function KanbanView({
       columnTasks(category).filter((t) => !t.routineId).map(wbsRow),
       `WBS ${WBS_SECTION[category]}`,
     );
+  /** 업무 목록 표: 끝내지 않은 업무와 아직 끝나지 않은 완료 업무, 오늘부터 일주일 치 루틴 카드 */
+  const tableTasks = [
+    ...tasks.filter((t) => t.status !== "완료" || rangeEnd(t) >= today),
+    ...Array.from({ length: 7 }, (_, i) => cardsOn(addDays(today, i))).flat(),
+  ];
+  const copyTable = async (text: string, count: number) => {
+    try {
+      await copyText(text);
+      toast(`${count}줄을 복사했어요`);
+    } catch {
+      toast("복사하지 못했어요. 다시 시도해 주세요", "error");
+    }
+  };
+
   const openWbs = () => window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
 
   /** 대기·완료 칸 하나: 빈 곳에 놓으면 칸 맨 아래로 */
@@ -366,6 +375,17 @@ export function KanbanView({
           );
         })}
       </div>
+
+      <TaskTable
+        tasks={tableTasks}
+        today={today}
+        hideDone={hideDone}
+        busyId={busyId}
+        onToggle={toggle}
+        onPatch={patchTask}
+        onOpen={(task) => setModal({ task })}
+        onCopied={copyTable}
+      />
 
       {modal && (
         <TaskFormModal
