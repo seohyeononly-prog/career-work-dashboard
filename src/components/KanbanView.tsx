@@ -8,7 +8,6 @@ import { byOrder, rangeEnd, type Category, type Routine, type Task, type TaskSta
 import { WBS_OWNER, WBS_SECTION, wbsFields } from "@/lib/wbs";
 import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
-import { TaskTable } from "./TaskTable";
 import { useToast } from "./Toast";
 import { Button, CATEGORY_STYLE, Empty, ErrorNote, cn, inputCls } from "./ui";
 
@@ -26,8 +25,11 @@ type Zone = { category: Category; status: TaskStatus };
 type Drag = { id: string; over?: { id: string; after: boolean }; zone?: Zone };
 const sameZone = (a: Zone | undefined, b: Zone) => a?.category === b.category && a.status === b.status;
 
-const WBS_URL =
-  "https://docs.google.com/spreadsheets/d/1rzAz-WZI-wsCtXZ_CDMRQjKe3mwi58HTDuvw7MqQ8dY/edit?gid=1496926969#gid=1496926969&range=";
+const WBS_SHEET = "https://docs.google.com/spreadsheets/d/1rzAz-WZI-wsCtXZ_CDMRQjKe3mwi58HTDuvw7MqQ8dY/edit";
+const WBS_GID = "1496926969";
+const WBS_URL = `${WBS_SHEET}?gid=${WBS_GID}#gid=${WBS_GID}&range=`;
+/** 칸반 아래에 넣는 시트. 메뉴·도구 모음을 숨기고(rm=minimal) 그 셀로 이동한다 */
+const wbsEmbedUrl = (cell: string) => `${WBS_SHEET}?gid=${WBS_GID}&rm=minimal#gid=${WBS_GID}&range=${cell}`;
 const WBS_DEFAULT_CELL = "A60";
 const WBS_CELL_KEY = "wbs-cell";
 /** 완료 업무 숨기기 (localStorage, 켜면 "1") */
@@ -86,8 +88,10 @@ export function KanbanView({
   initialRoutines: Routine[];
 }) {
   const today = todayStr();
-  const { tasks, tasksOn, cardsOn, routines, busyId, error, toggle, patchTask, save, remove, arrange, saveRoutine, removeRoutine } =
-    useTasks(initialTasks, initialRoutines);
+  const { tasksOn, routines, busyId, error, toggle, save, remove, arrange, saveRoutine, removeRoutine } = useTasks(
+    initialTasks,
+    initialRoutines,
+  );
   const [date, setDate] = useState(today);
   const [modal, setModal] = useState<{ task?: Task; category?: Category } | null>(null);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -98,6 +102,12 @@ export function KanbanView({
   const savedWbsCell = useSyncExternalStore(noSubscribe, readWbsCell, () => WBS_DEFAULT_CELL);
   const [editedWbsCell, setWbsCell] = useState<string | null>(null);
   const wbsCell = editedWbsCell ?? savedWbsCell;
+  // 아래 시트는 글자마다 다시 불러오지 않도록 Enter를 누르거나 칸을 벗어날 때만 옮긴다
+  const [appliedWbsCell, setAppliedWbsCell] = useState<string | null>(null);
+  const embedCell = appliedWbsCell ?? savedWbsCell;
+  const applyWbsCell = () => {
+    if (isCell(wbsCell)) setAppliedWbsCell(wbsCell);
+  };
   const changeWbsCell = (v: string) => {
     const cell = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
     setWbsCell(cell);
@@ -171,20 +181,6 @@ export function KanbanView({
       columnTasks(category).filter((t) => !t.routineId).map(wbsRow),
       `WBS ${WBS_SECTION[category]}`,
     );
-  /** 업무 목록 표: 끝내지 않은 업무와 아직 끝나지 않은 완료 업무, 오늘부터 일주일 치 루틴 카드 */
-  const tableTasks = [
-    ...tasks.filter((t) => t.status !== "완료" || rangeEnd(t) >= today),
-    ...Array.from({ length: 7 }, (_, i) => cardsOn(addDays(today, i))).flat(),
-  ];
-  const copyTable = async (text: string, count: number) => {
-    try {
-      await copyText(text);
-      toast(`${count}줄을 복사했어요`);
-    } catch {
-      toast("복사하지 못했어요. 다시 시도해 주세요", "error");
-    }
-  };
-
   const openWbs = () => window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
 
   /** 대기·완료 칸 하나: 빈 곳에 놓으면 칸 맨 아래로 */
@@ -273,8 +269,10 @@ export function KanbanView({
         <input
           value={wbsCell}
           onChange={(e) => changeWbsCell(e.target.value)}
-          aria-label="WBS 열 때 이동할 셀 위치"
-          title="WBS 열 때 이동할 셀 위치"
+          onKeyDown={(e) => e.key === "Enter" && applyWbsCell()}
+          onBlur={applyWbsCell}
+          aria-label="WBS 셀 위치"
+          title="WBS 셀 위치 (열기·아래 시트가 이 셀로 이동)"
           placeholder={WBS_DEFAULT_CELL}
           className={cn(inputCls, "w-18! text-center", !isCell(wbsCell) && "border-rose-400")}
         />
@@ -376,17 +374,21 @@ export function KanbanView({
         })}
       </div>
 
-      <TaskTable
-        tasks={tableTasks}
-        routines={routines}
-        today={today}
-        hideDone={hideDone}
-        busyId={busyId}
-        onToggle={toggle}
-        onPatch={patchTask}
-        onOpen={(task) => setModal({ task })}
-        onCopied={copyTable}
-      />
+      <section aria-label="WBS 시트" className="mt-5">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold">WBS</h2>
+          <span className="text-xs text-slate-500">
+            {embedCell}부터 보여요 · 셀 위치를 바꾸고 Enter를 누르면 다시 불러와요
+          </span>
+        </div>
+        {/* 이 브라우저에서 구글에 로그인돼 있고 시트 권한이 있어야 보인다 */}
+        <iframe
+          key={embedCell}
+          src={wbsEmbedUrl(embedCell)}
+          title="WBS 시트"
+          className="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"
+        />
+      </section>
 
       {modal && (
         <TaskFormModal
