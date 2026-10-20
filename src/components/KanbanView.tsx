@@ -71,7 +71,7 @@ function readHideDone() {
 }
 
 /** 마감보고 한 줄: 본부명을 앞에 붙이고, 기타 카테고리는 카테고리명을 뺀다 */
-const reportLine = (t: Task) => `[교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`;
+const reportLine = (t: Task) => `[B2G교육사업본부] ${t.category === "기타" ? "" : `${t.category} `}${t.title}`;
 
 /**
  * WBS 한 행(B~J열)을 탭으로 나눈 줄. 시트에 붙이면 칸마다 나뉘어 들어간다.
