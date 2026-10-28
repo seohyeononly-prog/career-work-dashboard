@@ -13,12 +13,12 @@ export const CATEGORY_STYLE: Record<Category, { dot: string; badge: string; bar:
   기타: { dot: "bg-amber-500", badge: "bg-amber-50 text-amber-800", bar: "bg-amber-500" },
 };
 
-/** 링크 카테고리 점 색 (교육사업본부·인턴은 업무 카테고리에 없어 따로 둔다) */
+/** 링크 카테고리 점 색 (교육사업본부·인턴먼저는 업무 카테고리에 없어 따로 둔다) */
 export const LINK_CATEGORY_DOT: Record<LinkCategory, string> = {
   일경험: CATEGORY_STYLE.일경험.dot,
   취업운영: CATEGORY_STYLE.취업운영.dot,
   교육사업본부: "bg-sky-500",
-  인턴: "bg-rose-500",
+  인턴먼저: "bg-rose-500",
 };
 
 export function Badge({ className, children }: { className?: string; children: ReactNode }) {

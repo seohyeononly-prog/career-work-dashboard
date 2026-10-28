@@ -11,7 +11,7 @@ const byServiceThenOrder = (a: LinkItem, b: LinkItem) =>
 
 const sameGroup = (a: LinkItem, b: LinkItem) => a.category === b.category && a.service === b.service;
 
-/** 사이드바의 자주 보는 링크: 일경험 · 취업운영 · 교육사업본부 · 인턴 토글, 안에서는 서비스 종류별로 모아 보여 준다 */
+/** 사이드바의 자주 보는 링크: 일경험 · 취업운영 · 교육사업본부 · 인턴먼저 토글, 안에서는 서비스 종류별로 모아 보여 준다 */
 export function SidebarLinks({
   links,
   openCategories,

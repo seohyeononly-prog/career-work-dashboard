@@ -63,7 +63,7 @@ export const linkInputSchema = z.object({
     .trim()
     .url("올바른 URL을 입력해 주세요.")
     .refine((u) => /^https?:\/\//i.test(u), "http 또는 https 주소만 등록할 수 있습니다."),
-  category: z.enum(LINK_CATEGORIES, { message: "링크 카테고리는 일경험, 취업운영, 교육사업본부, 인턴 중 하나여야 합니다." }),
+  category: z.enum(LINK_CATEGORIES, { message: "링크 카테고리는 일경험, 취업운영, 교육사업본부, 인턴먼저 중 하나여야 합니다." }),
   service: z.enum(SERVICE_TYPES, { message: "서비스 종류는 Drive, Google Sheets, Notion, 기타 중 하나여야 합니다." }),
   description: text(1000).default(""),
   favorite: z.boolean({ message: "즐겨찾기 여부는 true 또는 false여야 합니다." }).default(false),
