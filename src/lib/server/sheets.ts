@@ -62,8 +62,14 @@ function explain(detail: string): string {
   return detail;
 }
 
-async function call<T>(path: string, method: "GET" | "POST" | "PUT" = "GET", data?: unknown): Promise<T> {
-  const url = `${API}/${process.env.GOOGLE_SHEETS_SPREADSHEET_ID}${path}`;
+/** 저장소가 아닌 다른 스프레드시트(예: WBS)도 같은 서비스 계정으로 호출한다 */
+export async function sheetsRequest<T>(
+  spreadsheetId: string,
+  path: string,
+  method: "GET" | "POST" | "PUT" = "GET",
+  data?: unknown,
+): Promise<T> {
+  const url = `${API}/${spreadsheetId}${path}`;
   try {
     const res = await client().request<T>({ url, method, data });
     return res.data;
@@ -75,6 +81,9 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT" = "GET", dat
     throw new Error(`Google Sheets 요청 실패: ${hint === detail ? detail : `${hint} (${detail})`}`);
   }
 }
+
+const call = <T,>(path: string, method?: "GET" | "POST" | "PUT", data?: unknown) =>
+  sheetsRequest<T>(process.env.GOOGLE_SHEETS_SPREADSHEET_ID!, path, method, data);
 
 const colLetter = (n: number) => String.fromCharCode(64 + n); // 최대 26열이면 충분
 

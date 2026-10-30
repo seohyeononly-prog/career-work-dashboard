@@ -5,10 +5,11 @@ import { addDays, fullDate, todayStr } from "@/lib/date";
 import { useTasks } from "@/lib/use-tasks";
 import { isVirtual } from "@/lib/routines";
 import { byOrder, rangeEnd, type Category, type Routine, type Task, type TaskStatus } from "@/lib/types";
-import { WBS_OWNER, WBS_SECTION, wbsFields } from "@/lib/wbs";
+import { WBS_GID, WBS_OWNER, WBS_SECTION, WBS_SPREADSHEET_ID, wbsFields } from "@/lib/wbs";
 import { RoutinesModal, TaskFormModal } from "./forms";
 import { TaskCard } from "./TaskItem";
 import { useToast } from "./Toast";
+import { WbsSyncModal } from "./WbsSyncModal";
 import { Button, CATEGORY_STYLE, Empty, ErrorNote, cn, inputCls } from "./ui";
 
 /** 칸반 열 순서 */
@@ -25,8 +26,7 @@ type Zone = { category: Category; status: TaskStatus };
 type Drag = { id: string; over?: { id: string; after: boolean }; zone?: Zone };
 const sameZone = (a: Zone | undefined, b: Zone) => a?.category === b.category && a.status === b.status;
 
-const WBS_SHEET = "https://docs.google.com/spreadsheets/d/1rzAz-WZI-wsCtXZ_CDMRQjKe3mwi58HTDuvw7MqQ8dY/edit";
-const WBS_GID = "1496926969";
+const WBS_SHEET = `https://docs.google.com/spreadsheets/d/${WBS_SPREADSHEET_ID}/edit`;
 const WBS_URL = `${WBS_SHEET}?gid=${WBS_GID}#gid=${WBS_GID}&range=`;
 /** 칸반 아래에 넣는 시트. 메뉴·도구 모음을 숨기고(rm=minimal) 그 셀로 이동한다 */
 const wbsEmbedUrl = (cell: string) => `${WBS_SHEET}?gid=${WBS_GID}&rm=minimal#gid=${WBS_GID}&range=${cell}`;
@@ -98,6 +98,9 @@ export function KanbanView({
   const [date, setDate] = useState(today);
   const [modal, setModal] = useState<{ task?: Task; category?: Category } | null>(null);
   const [routinesOpen, setRoutinesOpen] = useState(false);
+  const [wbsSyncOpen, setWbsSyncOpen] = useState(false);
+  /** 동기화 뒤 아래 시트를 다시 불러오기 위한 값 */
+  const [wbsReload, setWbsReload] = useState(0);
   const [drag, setDrag] = useState<Drag | null>(null);
   const toast = useToast();
   // 시트 위에 있는 채로 다른 화면으로 넘어가도 페이지 스크롤 잠금을 푼다
@@ -270,6 +273,9 @@ export function KanbanView({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-base font-semibold">칸반보드</h1>
         <Button onClick={copyReport}>마감보고 복사</Button>
+        <Button onClick={() => setWbsSyncOpen(true)} title="칸반 업무를 WBS 시트에 추가·수정·삭제 (미리보기 후 반영)">
+          WBS 동기화
+        </Button>
         <Button onClick={openWbs}>WBS 열기</Button>
         <input
           value={wbsCell}
@@ -389,7 +395,7 @@ export function KanbanView({
         {/* 이 브라우저에서 구글에 로그인돼 있고 시트 권한이 있어야 보인다.
             시트는 스크롤을 직접 처리해서 페이지까지 같이 스크롤되므로, 마우스가 시트 위에 있는 동안 페이지 스크롤을 잠근다 */}
         <iframe
-          key={embedCell}
+          key={`${embedCell}-${wbsReload}`}
           src={wbsEmbedUrl(embedCell)}
           title="WBS 시트"
           onMouseEnter={() => lockPageScroll(true)}
@@ -413,6 +419,17 @@ export function KanbanView({
             setModal(null);
           }}
           onRoutineSaved={saveRoutine}
+        />
+      )}
+
+      {wbsSyncOpen && (
+        <WbsSyncModal
+          onClose={() => setWbsSyncOpen(false)}
+          onApplied={(count) => {
+            setWbsSyncOpen(false);
+            setWbsReload((n) => n + 1);
+            toast(count ? `WBS 시트에 ${count}건을 반영했어요` : "바꿀 내용이 없었어요");
+          }}
         />
       )}
 

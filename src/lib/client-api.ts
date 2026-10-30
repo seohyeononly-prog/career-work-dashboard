@@ -1,5 +1,6 @@
 // 브라우저에서 호출하는 API 래퍼. 자격 증명 없이 우리 서버의 /api 라우트만 호출한다.
 import type { LinkInput, LinkItem, Routine, RoutineInput, Task, TaskInput } from "./types";
+import type { WbsPlan } from "./wbs";
 
 async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -30,6 +31,9 @@ export const api = {
   /** 그날만 루틴 건너뛰기. 루틴이 이미 지워졌으면 null */
   skipRoutine: (id: string, date: string) =>
     request<Routine | null>(`/api/routines/${encodeURIComponent(id)}/skip`, "POST", { date }),
+  /** WBS 시트에 바뀔 내용 미리보기 / 그 내용 그대로 반영 */
+  planWbs: () => request<WbsPlan>("/api/wbs", "GET"),
+  applyWbs: (token: string) => request<{ applied: number }>("/api/wbs", "POST", { token }),
 };
 
 /** 목록에서 같은 ID 항목을 교체하거나 새로 추가 */
