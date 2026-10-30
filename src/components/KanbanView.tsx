@@ -27,7 +27,6 @@ type Drag = { id: string; over?: { id: string; after: boolean }; zone?: Zone };
 const sameZone = (a: Zone | undefined, b: Zone) => a?.category === b.category && a.status === b.status;
 
 const WBS_SHEET = `https://docs.google.com/spreadsheets/d/${WBS_SPREADSHEET_ID}/edit`;
-const WBS_URL = `${WBS_SHEET}?gid=${WBS_GID}#gid=${WBS_GID}&range=`;
 /** 칸반 아래에 넣는 시트. 메뉴·도구 모음을 숨기고(rm=minimal) 그 셀로 이동한다 */
 const wbsEmbedUrl = (cell: string) => `${WBS_SHEET}?gid=${WBS_GID}&rm=minimal#gid=${WBS_GID}&range=${cell}`;
 const lockPageScroll = (on: boolean) => {
@@ -189,7 +188,6 @@ export function KanbanView({
       columnTasks(category).filter((t) => !t.routineId).map(wbsRow),
       `WBS ${WBS_SECTION[category]}`,
     );
-  const openWbs = () => window.open(WBS_URL + (isCell(wbsCell) ? wbsCell : WBS_DEFAULT_CELL), "_blank", "noopener");
 
   /** 대기·완료 칸 하나: 빈 곳에 놓으면 칸 맨 아래로 */
   const renderZone = (zone: Zone) => {
@@ -276,14 +274,13 @@ export function KanbanView({
         <Button onClick={() => setWbsSyncOpen(true)} title="칸반 업무를 WBS 시트에 추가·수정·삭제 (미리보기 후 반영)">
           WBS 동기화
         </Button>
-        <Button onClick={openWbs}>WBS 열기</Button>
         <input
           value={wbsCell}
           onChange={(e) => changeWbsCell(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && applyWbsCell()}
           onBlur={applyWbsCell}
           aria-label="WBS 셀 위치"
-          title="WBS 셀 위치 (열기·아래 시트가 이 셀로 이동)"
+          title="WBS 셀 위치 (아래 시트가 이 셀로 이동)"
           placeholder={WBS_DEFAULT_CELL}
           className={cn(inputCls, "w-18! text-center", !isCell(wbsCell) && "border-rose-400")}
         />
